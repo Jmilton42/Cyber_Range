@@ -1,0 +1,8 @@
+# Cyber Range Config Server
+# Copy to config.yaml and adjust values
+
+# Server listen address
+listen: ":8080"
+
+# Path to LXD instances JSON file (from lxc list --format json)
+instances_file: "./instances.json"
