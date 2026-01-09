@@ -113,13 +113,25 @@ func (s *Server) HandleConfig(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Found instance: %s", instance.Name)
 
-	// Parse network config
-	networkConfig := s.parseNetworkConfig(instance)
+	// Parse all network configs
+	networks := s.parseAllNetworkConfigs(instance)
+
+	// Get primary network (first one) for backwards compatibility
+	var primaryNetwork config.NetworkConfig
+	for _, netCfg := range networks {
+		primaryNetwork = netCfg
+		break
+	}
+	// If no networks found, default to DHCP
+	if len(networks) == 0 {
+		primaryNetwork = config.NetworkConfig{DHCP: true}
+	}
 
 	// Build response
 	response := config.ConfigResponse{
 		Hostname: instance.Name,
-		Network:  networkConfig,
+		Network:  primaryNetwork,
+		Networks: networks,
 	}
 
 	// Send JSON response
@@ -130,7 +142,7 @@ func (s *Server) HandleConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Sent config for %s: dhcp=%v, address=%s", instance.Name, networkConfig.DHCP, networkConfig.Address)
+	log.Printf("Sent config for %s: %d network(s), primary: dhcp=%v, address=%s", instance.Name, len(networks), primaryNetwork.DHCP, primaryNetwork.Address)
 }
 
 // findInstanceByMAC finds an instance by checking volatile.*.hwaddr fields
@@ -150,56 +162,61 @@ func (s *Server) findInstanceByMAC(mac string) *config.LXDInstance {
 	return nil
 }
 
-// parseNetworkConfig parses cloud-init.network-config from the instance
-func (s *Server) parseNetworkConfig(instance *config.LXDInstance) config.NetworkConfig {
+// parseAllNetworkConfigs parses all ethernet configs from cloud-init.network-config
+func (s *Server) parseAllNetworkConfigs(instance *config.LXDInstance) map[string]config.NetworkConfig {
+	networks := make(map[string]config.NetworkConfig)
 	cloudInitConfig := instance.Config["cloud-init.network-config"]
 
 	// Check for simple DHCP string
 	if strings.TrimSpace(strings.ToUpper(cloudInitConfig)) == "DHCP" {
-		return config.NetworkConfig{DHCP: true}
+		return networks // Empty map, client will use DHCP
 	}
 
 	// Try to parse as netplan YAML
 	var cloudInit config.CloudInitNetwork
 	if err := yaml.Unmarshal([]byte(cloudInitConfig), &cloudInit); err != nil {
-		log.Printf("Failed to parse cloud-init config for %s, defaulting to DHCP: %v", instance.Name, err)
-		return config.NetworkConfig{DHCP: true}
+		log.Printf("Failed to parse cloud-init config for %s: %v", instance.Name, err)
+		return networks
 	}
 
-	// Find the first ethernet device with static config
-	for _, eth := range cloudInit.Ethernets {
-		// If DHCP is enabled, return DHCP config
-		if eth.DHCP4 {
-			return config.NetworkConfig{DHCP: true}
-		}
+	// Parse ALL ethernet devices
+	for ifaceName, eth := range cloudInit.Ethernets {
+		netConfig := config.NetworkConfig{DHCP: eth.DHCP4}
 
-		// Build static config
-		netConfig := config.NetworkConfig{DHCP: false}
+		if !eth.DHCP4 {
+			// Get first address
+			if len(eth.Addresses) > 0 {
+				netConfig.Address = eth.Addresses[0]
+			}
 
-		// Get first address
-		if len(eth.Addresses) > 0 {
-			netConfig.Address = eth.Addresses[0]
-		}
-
-		// Get gateway from gateway4 or routes
-		if eth.Gateway4 != "" {
-			netConfig.Gateway = eth.Gateway4
-		} else {
-			for _, route := range eth.Routes {
-				if route.To == "default" || route.To == "0.0.0.0/0" {
-					netConfig.Gateway = route.Via
-					break
+			// Get gateway from gateway4 or routes
+			if eth.Gateway4 != "" {
+				netConfig.Gateway = eth.Gateway4
+			} else {
+				for _, route := range eth.Routes {
+					if route.To == "default" || route.To == "0.0.0.0/0" {
+						netConfig.Gateway = route.Via
+						break
+					}
 				}
 			}
+
+			// Get DNS servers
+			netConfig.DNS = eth.Nameservers.Addresses
 		}
 
-		// Get DNS servers
-		netConfig.DNS = eth.Nameservers.Addresses
-
-		return netConfig
+		networks[ifaceName] = netConfig
 	}
 
-	// Default to DHCP if no config found
+	return networks
+}
+
+// parseNetworkConfig parses cloud-init.network-config from the instance (legacy, returns first)
+func (s *Server) parseNetworkConfig(instance *config.LXDInstance) config.NetworkConfig {
+	networks := s.parseAllNetworkConfigs(instance)
+	for _, netCfg := range networks {
+		return netCfg
+	}
 	return config.NetworkConfig{DHCP: true}
 }
 

@@ -1,12 +1,12 @@
 # Cyber Range Configuration Agent - Setup Guide
 
-Automatically configures Windows VM hostname and network settings based on LXD instance configuration.
+Automatically configures Windows and OpenWrt VM/container hostname and network settings based on LXD instance configuration.
 
 ## How It Works
 
 ```
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│  deploy.sh   │     │  Go Server   │     │  Windows VM  │
+│  deploy.sh   │     │  Go Server   │     │ Windows/Wrt  │
 │              │     │              │     │              │
 │ 1. tofu apply│     │              │     │              │
 │ 2. lxc list  │────▶│ 3. Load JSON │     │              │
@@ -21,7 +21,7 @@ Automatically configures Windows VM hostname and network settings based on LXD i
 1. `deploy.sh` runs OpenTofu to create VMs
 2. Script exports `lxc list --format json` to `instances.json`
 3. Go server loads the JSON file
-4. Windows VMs boot (with 0-30 second random delay)
+4. VMs/containers boot (with 0-30 second random delay)
 5. Client requests config using its MAC address
 6. Server finds matching instance, returns hostname + network config
 7. Client applies settings and creates marker file (won't run again)
@@ -33,7 +33,7 @@ Automatically configures Windows VM hostname and network settings based on LXD i
 
 ### 1. Build Binaries
 
-```bash
+```powershell
 cd Cyber_Range
 
 # Download dependencies
@@ -42,8 +42,11 @@ go mod tidy
 # Build server (Linux)
 $env:GOOS="linux"; $env:GOARCH="amd64"; go build -o server ./cmd/server
 
-# Build client (Windows)
-$env:GOOS="windows"; $env:GOARCH="amd64"; go build -o client.exe ./cmd/client
+# Build Windows client
+$env:GOOS="windows"; $env:GOARCH="amd64"; go build -o client.exe ./cmd/client/windows
+
+# Build OpenWrt client (Linux x86_64)
+$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o openwrt-client ./cmd/client/openwrt
 ```
 
 ### 2. Prepare Windows Base Image
@@ -51,6 +54,9 @@ $env:GOOS="windows"; $env:GOARCH="amd64"; go build -o client.exe ./cmd/client
 On your `windows-10-base` VM:
 
 ```powershell
+# Allows scripts to run
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+
 # Create directory
 New-Item -Path "C:\ProgramData\cyber-range" -ItemType Directory -Force
 
@@ -62,7 +68,38 @@ New-Item -Path "C:\ProgramData\cyber-range" -ItemType Directory -Force
 
 Then snapshot/export the image.
 
-### 3. Deploy
+### 3. Prepare OpenWrt Base Image
+
+On your OpenWrt container/VM:
+
+```bash
+# Create directory
+mkdir -p /etc/cyber-range
+
+# Copy openwrt-client binary
+scp openwrt-client root@openwrt:/etc/cyber-range/
+
+# Make executable
+chmod +x /etc/cyber-range/openwrt-client
+
+# Create startup script
+cat > /etc/init.d/cyber-range-config << 'EOF'
+#!/bin/sh /etc/rc.common
+START=99
+STOP=10
+
+start() {
+    /etc/cyber-range/openwrt-client -server "http://YOUR_SERVER_IP:8080" -interface eth1
+}
+EOF
+
+chmod +x /etc/init.d/cyber-range-config
+/etc/init.d/cyber-range-config enable
+```
+
+Then snapshot/export the image.
+
+### 4. Deploy
 
 Copy to your OpenTofu box:
 - `server` binary
@@ -116,7 +153,7 @@ lxc list --format json > instances.json
 ./server -instances instances.json -listen :8080 -idle-timeout 15m
 ```
 
-### Client Setup (Windows Image)
+### Windows Client Setup
 
 1. Copy `client.exe` to `C:\ProgramData\cyber-range\`
 
@@ -127,33 +164,87 @@ lxc list --format json > instances.json
 
 3. Snapshot the VM as your new base image
 
+**What it does:**
+- Sets hostname from LXD instance name
+- Configures network (static IP or DHCP)
+- Reboots to apply hostname change
+
+### OpenWrt Client Setup
+
+1. Copy `openwrt-client` to `/etc/cyber-range/`
+
+2. Create init script:
+   ```bash
+   cat > /etc/init.d/cyber-range-config << 'EOF'
+   #!/bin/sh /etc/rc.common
+   START=99
+   STOP=10
+
+   start() {
+       /etc/cyber-range/openwrt-client -server "http://SERVER_IP:8080" -interface eth1
+   }
+   EOF
+   
+   chmod +x /etc/init.d/cyber-range-config
+   /etc/init.d/cyber-range-config enable
+   ```
+
+3. Snapshot the container as your new base image
+
+**What it does:**
+- Configures network interfaces via UCI (does NOT change hostname)
+- Maps cloud-init interface names to UCI names:
+  - `eth0`, `eth-0` → `wan`
+  - `eth1`, `eth-1` → `lan`
+  - `eth2`, `eth-2` → `lan2`
+- Restarts network service to apply changes
+
 ### Terraform Configuration
 
-Add `cloud-init.network-config` to your Windows instances:
+Add `cloud-init.network-config` to your instances:
 
-**DHCP:**
+**Windows - Single Interface (Static IP):**
+```hcl
+config = {
+  "cloud-init.network-config" = <<-EOF
+    version: 2
+    ethernets:
+      eth-0:
+        dhcp4: false
+        addresses:
+          - 192.168.1.100/24
+        routes:
+          - to: default
+            via: 192.168.1.1
+        nameservers:
+          addresses: [192.168.1.1]
+    EOF
+}
+```
+
+**Windows - DHCP:**
 ```hcl
 config = {
   "cloud-init.network-config" = "DHCP"
 }
 ```
 
-**Static IP:**
+**OpenWrt - Multiple Interfaces:**
 ```hcl
 config = {
   "cloud-init.network-config" = <<-EOF
-    network:
-      version: 2
-      ethernets:
-        eth-1:
-          addresses:
-            - 192.168.1.100/24
-          routes:
-            - to: default
-              via: 192.168.1.1
-          nameservers:
-            addresses:
-              - 8.8.8.8
+    version: 2
+    ethernets:
+      eth0:
+        dhcp4: true
+      eth1:
+        dhcp4: false
+        addresses:
+          - 192.168.1.1/24
+      eth2:
+        dhcp4: false
+        addresses:
+          - 172.31.31.1/24
     EOF
 }
 ```
@@ -190,10 +281,19 @@ instances_file: "./instances.json"
 | `/reload` | POST | Reload instances.json |
 | `/status` | GET | Check server status and idle time |
 
-**Auto-Shutdown:**
-The server automatically shuts down after 15 minutes of no requests. This ensures the server doesn't run indefinitely after all VMs are configured.
+**API Response:**
+```json
+{
+  "hostname": "team1-win10",
+  "network": { "dhcp": false, "address": "192.168.1.15/24", "gateway": "192.168.1.1" },
+  "networks": {
+    "eth-0": { "dhcp": false, "address": "192.168.1.15/24", "gateway": "192.168.1.1" },
+    "eth-1": { "dhcp": true }
+  }
+}
+```
 
-### Client
+### Windows Client
 
 **Command line:**
 ```bash
@@ -214,14 +314,49 @@ client.exe -server http://server:8080
 | `C:\ProgramData\cyber-range\.configured` | Marker file (prevents re-run) |
 | `C:\ProgramData\cyber-range\config.log` | Log file |
 
+### OpenWrt Client
+
+**Command line:**
+```bash
+./openwrt-client -server http://server:8080 -interface eth1
+```
+
+**Flags:**
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-server` | (required) | Server URL |
+| `-interface` | `eth1` | Interface for MAC lookup |
+| `-no-delay` | false | Skip random startup delay |
+
+**Files:**
+| Path | Description |
+|------|-------------|
+| `/etc/cyber-range/openwrt-client` | Client binary |
+| `/etc/cyber-range/.configured` | Marker file (prevents re-run) |
+| `/etc/cyber-range/config.log` | Log file |
+
+**Interface Mapping:**
+| Cloud-init | UCI Interface |
+|------------|---------------|
+| `eth0`, `eth-0` | `wan` |
+| `eth1`, `eth-1` | `lan` |
+| `eth2`, `eth-2` | `lan2` |
+| `eth3`, `eth-3` | `lan3` |
+
 ---
 
 ## Troubleshooting
 
 ### Check Client Logs
 
+**Windows:**
 ```
 C:\ProgramData\cyber-range\config.log
+```
+
+**OpenWrt:**
+```bash
+cat /etc/cyber-range/config.log
 ```
 
 ### Check Server Logs
@@ -253,14 +388,23 @@ Remove-Item "C:\ProgramData\cyber-range\config.log" -Force
 Restart-Computer
 ```
 
+### Reset an OpenWrt Container
+
+```bash
+rm /etc/cyber-range/.configured
+rm /etc/cyber-range/config.log
+/etc/init.d/cyber-range-config start
+```
+
 ### Common Issues
 
 | Issue | Solution |
 |-------|----------|
 | Client can't reach server | Check firewall, verify server IP |
 | "Instance not found" | VM might not be in instances.json - run `/reload` |
-| Hostname not changed | Requires reboot |
+| Hostname not changed | Requires reboot (Windows only) |
 | "Already configured" | Delete `.configured` marker file |
+| OpenWrt interface wrong | Check interface mapping or use `-interface` flag |
 
 ---
 
@@ -270,19 +414,28 @@ Restart-Computer
 Cyber_Range/
 ├── go.mod
 ├── cmd/
-│   ├── server/main.go      # Server entry point
-│   └── client/main.go      # Client entry point
-├── internal/
-│   ├── config/types.go     # Shared types
-│   ├── server/server.go    # Server logic
+│   ├── server/main.go           # Server entry point
 │   └── client/
-│       ├── mac.go          # MAC address
-│       ├── hostname.go     # Hostname change
-│       ├── network.go      # Network config
-│       └── marker.go       # Run-once marker
+│       ├── windows/main.go      # Windows client
+│       └── openwrt/main.go      # OpenWrt client
+├── internal/
+│   ├── config/types.go          # Shared types
+│   ├── server/server.go         # Server logic
+│   └── client/
+│       ├── common/
+│       │   └── mac.go           # MAC address (shared)
+│       ├── windows/
+│       │   ├── hostname.go      # Hostname change
+│       │   ├── network.go       # Network config (netsh)
+│       │   ├── reboot.go        # System reboot
+│       │   └── marker.go        # Run-once marker
+│       └── openwrt/
+│           ├── network.go       # Network config (UCI)
+│           ├── restart.go       # Network restart
+│           └── marker.go        # Run-once marker
 ├── scripts/
-│   ├── deploy.sh           # Deployment script
-│   └── setup-task.ps1      # Windows task setup
+│   ├── deploy.sh                # Deployment script
+│   └── setup-task.ps1           # Windows task setup
 ├── config.yaml.example
 └── SETUP.md
 ```

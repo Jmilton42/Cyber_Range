@@ -8,8 +8,9 @@ type ServerConfig struct {
 
 // ConfigResponse is sent from server to client
 type ConfigResponse struct {
-	Hostname string        `json:"hostname"`
-	Network  NetworkConfig `json:"network"`
+	Hostname string                   `json:"hostname"`
+	Network  NetworkConfig            `json:"network"`            // Primary network (backwards compat)
+	Networks map[string]NetworkConfig `json:"networks,omitempty"` // All networks keyed by interface name
 }
 
 // NetworkConfig holds network configuration for the client
