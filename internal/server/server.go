@@ -167,7 +167,7 @@ func (s *Server) parseNetworkConfig(instance *config.LXDInstance) config.Network
 	}
 
 	// Find the first ethernet device with static config
-	for _, eth := range cloudInit.Network.Ethernets {
+	for _, eth := range cloudInit.Ethernets {
 		// If DHCP is enabled, return DHCP config
 		if eth.DHCP4 {
 			return config.NetworkConfig{DHCP: true}

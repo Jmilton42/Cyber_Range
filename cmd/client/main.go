@@ -104,7 +104,12 @@ func main() {
 	log.Println("Marker file created.")
 
 	log.Println("=== Configuration Complete ===")
-	log.Println("Note: Hostname change requires a system reboot.")
+	log.Println("Initiating system reboot in 5 seconds...")
+
+	// Reboot with 5 second delay to allow logs to flush
+	if err := client.Reboot(5); err != nil {
+		log.Fatalf("Failed to initiate reboot: %v", err)
+	}
 }
 
 // randomDelay returns a random number between 0 and max

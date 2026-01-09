@@ -40,10 +40,10 @@ cd Cyber_Range
 go mod tidy
 
 # Build server (Linux)
-GOOS=linux GOARCH=amd64 go build -o server ./cmd/server
+$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o server ./cmd/server
 
 # Build client (Windows)
-GOOS=windows GOARCH=amd64 go build -o client.exe ./cmd/client
+$env:GOOS="windows"; $env:GOARCH="amd64"; go build -o client.exe ./cmd/client
 ```
 
 ### 2. Prepare Windows Base Image

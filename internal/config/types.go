@@ -28,10 +28,8 @@ type LXDInstance struct {
 
 // CloudInitNetwork represents netplan-style network config
 type CloudInitNetwork struct {
-	Network struct {
-		Version   int                          `yaml:"version"`
-		Ethernets map[string]CloudInitEthernet `yaml:"ethernets"`
-	} `yaml:"network"`
+	Version   int                          `yaml:"version"`
+	Ethernets map[string]CloudInitEthernet `yaml:"ethernets"`
 }
 
 // CloudInitEthernet represents an ethernet device in cloud-init

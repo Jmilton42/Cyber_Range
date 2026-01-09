@@ -9,6 +9,7 @@ PROJECT_NAME="${PROJECT_NAME:-homelab-dcig}"
 SERVER_PORT="${SERVER_PORT:-8080}"
 INSTANCES_FILE="${INSTANCES_FILE:-instances.json}"
 IDLE_TIMEOUT="${IDLE_TIMEOUT:-15m}"
+SERVER_IP="${SERVER_IP:-192.168.1.2}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -61,7 +62,7 @@ start_server() {
     pkill -f "./server" 2>/dev/null || true
     
     # Start server in background with idle timeout
-    nohup ./server -listen ":$SERVER_PORT" -instances "$INSTANCES_FILE" -idle-timeout "$IDLE_TIMEOUT" > server.log 2>&1 &
+    nohup ./server -listen "$SERVER_IP:$SERVER_PORT" -instances "$INSTANCES_FILE" -idle-timeout "$IDLE_TIMEOUT" > server.log 2>&1 &
     SERVER_PID=$!
     
     sleep 2
@@ -92,7 +93,7 @@ main() {
     echo ""
     log_info "Deployment complete!"
     echo ""
-    echo "Server running at: http://$(hostname -I | awk '{print $1}'):$SERVER_PORT"
+    echo "Server running at: http://SERVER_IP:$SERVER_PORT"
     echo "Idle timeout: $IDLE_TIMEOUT (server will auto-shutdown after no requests)"
     echo ""
     echo "Endpoints:"
