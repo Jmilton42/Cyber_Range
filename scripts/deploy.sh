@@ -9,7 +9,7 @@ PROJECT_NAME="${PROJECT_NAME:-homelab-dcig}"
 SERVER_PORT="${SERVER_PORT:-8080}"
 INSTANCES_FILE="${INSTANCES_FILE:-instances.json}"
 IDLE_TIMEOUT="${IDLE_TIMEOUT:-15m}"
-SERVER_IP="${SERVER_IP:-192.168.1.2}"
+SUBNETS_FILE="${SUBNETS_FILE:-subnets.json}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -29,10 +29,79 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Run OpenTofu
+# Initialize subnets file if it doesn't exist
+init_subnets_file() {
+    if [ ! -f "$SUBNETS_FILE" ]; then
+        log_info "Creating subnets file: $SUBNETS_FILE"
+        echo '{"allocations":[]}' > "$SUBNETS_FILE"
+    fi
+}
+
+# Get next available subnet octet
+get_next_subnet() {
+    init_subnets_file
+    
+    # Check if project already has an allocation
+    existing=$(jq -r --arg proj "$PROJECT_NAME" '.allocations[] | select(.project == $proj) | .subnet_octet' "$SUBNETS_FILE")
+    
+    if [ -n "$existing" ]; then
+        log_info "Project '$PROJECT_NAME' already has subnet octet: $existing"
+        echo "$existing"
+        return
+    fi
+    
+    # Find next available octet (starting from 1)
+    used_octets=$(jq -r '.allocations[].subnet_octet' "$SUBNETS_FILE" | sort -n)
+    
+    next_octet=1
+    for used in $used_octets; do
+        if [ "$next_octet" -eq "$used" ]; then
+            next_octet=$((next_octet + 1))
+        else
+            break
+        fi
+    done
+    
+    # Cap at 254 (valid third octet range)
+    if [ "$next_octet" -gt 254 ]; then
+        log_error "No available subnet octets (all 1-254 are allocated)"
+        exit 1
+    fi
+    
+    echo "$next_octet"
+}
+
+# Allocate subnet for project
+allocate_subnet() {
+    local octet=$1
+    init_subnets_file
+    
+    # Check if already allocated
+    existing=$(jq -r --arg proj "$PROJECT_NAME" '.allocations[] | select(.project == $proj) | .subnet_octet' "$SUBNETS_FILE")
+    
+    if [ -n "$existing" ]; then
+        log_info "Subnet already allocated for project '$PROJECT_NAME'"
+        return
+    fi
+    
+    log_info "Allocating subnet octet $octet for project '$PROJECT_NAME'"
+    
+    # Add allocation
+    timestamp=$(date -Iseconds)
+    jq --arg proj "$PROJECT_NAME" \
+       --argjson octet "$octet" \
+       --arg ts "$timestamp" \
+       '.allocations += [{"project": $proj, "subnet_octet": $octet, "allocated_at": $ts}]' \
+       "$SUBNETS_FILE" > "${SUBNETS_FILE}.tmp" && mv "${SUBNETS_FILE}.tmp" "$SUBNETS_FILE"
+    
+    log_info "Subnet allocated: 10.0.${octet}.0/24"
+}
+
+# Run OpenTofu with subnet variable
 run_tofu() {
-    log_info "Running OpenTofu apply..."
-    tofu apply
+    local subnet_octet=$1
+    log_info "Running OpenTofu apply with guac_subnet_octet=$subnet_octet..."
+    tofu apply -var "guac_subnet_octet=$subnet_octet" -var "project_name=$PROJECT_NAME"
     log_info "OpenTofu apply completed"
 }
 
@@ -85,7 +154,14 @@ main() {
     echo "=========================================="
     echo ""
     
-    run_tofu
+    # Get and allocate subnet
+    SUBNET_OCTET=$(get_next_subnet)
+    allocate_subnet "$SUBNET_OCTET"
+    
+    log_info "Using guac subnet: 10.0.${SUBNET_OCTET}.0/24"
+    echo ""
+    
+    run_tofu "$SUBNET_OCTET"
     wait_for_vms
     export_instances
     start_server
@@ -93,7 +169,8 @@ main() {
     echo ""
     log_info "Deployment complete!"
     echo ""
-    echo "Server running at: http://SERVER_IP:$SERVER_PORT"
+    echo "Server running at: http://$SERVER_IP:$SERVER_PORT"
+    echo "Guac subnet: 10.0.${SUBNET_OCTET}.0/24 (gateway: 10.0.${SUBNET_OCTET}.1)"
     echo "Idle timeout: $IDLE_TIMEOUT (server will auto-shutdown after no requests)"
     echo ""
     echo "Endpoints:"
