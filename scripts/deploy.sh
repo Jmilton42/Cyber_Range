@@ -5,10 +5,10 @@
 set -e
 
 # Configuration - modify these
-PROJECT_NAME="${PROJECT_NAME:-homelab-dcig}"
+PROJECT_NAME="${PROJECT_NAME:-dcig}"
 SERVER_PORT="${SERVER_PORT:-8080}"
 INSTANCES_FILE="${INSTANCES_FILE:-instances.json}"
-IDLE_TIMEOUT="${IDLE_TIMEOUT:-15m}"
+IDLE_TIMEOUT="${IDLE_TIMEOUT:-5m}"
 SUBNETS_FILE="${SUBNETS_FILE:-subnets.json}"
 
 # Colors for output
@@ -29,7 +29,6 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Initialize subnets file if it doesn't exist
 init_subnets_file() {
     if [ ! -f "$SUBNETS_FILE" ]; then
         log_info "Creating subnets file: $SUBNETS_FILE"
@@ -97,7 +96,7 @@ allocate_subnet() {
     log_info "Subnet allocated: 10.0.${octet}.0/24"
 }
 
-# Run OpenTofu with subnet variable
+# Run OpenTofu
 run_tofu() {
     local subnet_octet=$1
     log_info "Running OpenTofu apply with guac_subnet_octet=$subnet_octet..."
@@ -128,10 +127,10 @@ start_server() {
     log_info "Starting configuration server on port $SERVER_PORT..."
     
     # Kill any existing server
-    pkill -f "./server" 2>/dev/null || true
+    pgrep -x server | xargs -r kill 2>/dev/null || true
     
     # Start server in background with idle timeout
-    nohup ./server -listen "$SERVER_IP:$SERVER_PORT" -instances "$INSTANCES_FILE" -idle-timeout "$IDLE_TIMEOUT" > server.log 2>&1 &
+    nohup ./server -listen "10.0.14.6:$SERVER_PORT" -instances "$INSTANCES_FILE" -idle-timeout "$IDLE_TIMEOUT" > server.log 2>&1 &
     SERVER_PID=$!
     
     sleep 2
@@ -146,6 +145,11 @@ start_server() {
     fi
 }
 
+start_win() {
+    log_info "Starting Windows VMs..."
+    bash /home/ceroc/InSPIRE/bin/scripts/start_win.sh "$PROJECT_NAME"
+}
+
 # Main
 main() {
     echo "=========================================="
@@ -153,8 +157,7 @@ main() {
     echo "  Project: $PROJECT_NAME"
     echo "=========================================="
     echo ""
-    
-    # Get and allocate subnet
+
     SUBNET_OCTET=$(get_next_subnet)
     allocate_subnet "$SUBNET_OCTET"
     
@@ -165,12 +168,12 @@ main() {
     wait_for_vms
     export_instances
     start_server
+    start_win
     
     echo ""
     log_info "Deployment complete!"
     echo ""
-    echo "Server running at: http://$SERVER_IP:$SERVER_PORT"
-    echo "Guac subnet: 10.0.${SUBNET_OCTET}.0/24 (gateway: 10.0.${SUBNET_OCTET}.1)"
+    echo "Server running at: http://10.0.14.6:$SERVER_PORT"
     echo "Idle timeout: $IDLE_TIMEOUT (server will auto-shutdown after no requests)"
     echo ""
     echo "Endpoints:"

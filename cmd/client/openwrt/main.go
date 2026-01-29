@@ -73,8 +73,8 @@ func main() {
 	}
 	log.Printf("Using MAC address from %s: %s", *interfaceName, mac)
 
-	// Request configuration with retries
-	cfg, err := requestConfigWithRetry(*serverURL, mac, 10, 15*time.Second)
+	// Request configuration with retries (60 retries × 60s = 60 minutes max)
+	cfg, err := requestConfigWithRetry(*serverURL, mac, 60, 60*time.Second)
 	if err != nil {
 		log.Fatalf("Failed to get configuration: %v", err)
 	}

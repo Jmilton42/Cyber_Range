@@ -1,13 +1,13 @@
 # Cyber Range Configuration Agent - Setup Guide
 
-Automatically configures Windows and OpenWrt VM/container hostname and network settings based on LXD instance configuration.
+Automatically configures Windows, Linux, and OpenWrt VM/container hostname and network settings based on LXD instance configuration.
 
 ## How It Works
 
 ```
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│  deploy.sh   │     │  Go Server   │     │ Windows/Wrt  │
-│              │     │              │     │              │
+│  deploy.sh   │     │  Go Server   │     │  Win/Linux/  │
+│              │     │              │     │   OpenWrt    │
 │ 1. tofu apply│     │              │     │              │
 │ 2. lxc list  │────▶│ 3. Load JSON │     │              │
 │    --json    │     │              │     │ 4. Boot      │
@@ -44,6 +44,9 @@ $env:GOOS="linux"; $env:GOARCH="amd64"; go build -o server ./cmd/server
 
 # Build Windows client
 $env:GOOS="windows"; $env:GOARCH="amd64"; go build -o client.exe ./cmd/client/windows
+
+# Build Linux client
+$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o linux-client ./cmd/client/linux
 
 # Build OpenWrt client (Linux x86_64)
 $env:GOOS="linux"; $env:GOARCH="amd64"; go build -o openwrt-client ./cmd/client/openwrt
@@ -99,7 +102,42 @@ chmod +x /etc/init.d/cyber-range-config
 
 Then snapshot/export the image.
 
-### 4. Deploy
+### 4. Prepare Linux Base Image
+
+On your Linux VM (Ubuntu, Debian, RHEL, CentOS, Fedora, etc.):
+
+```bash
+# Create directory
+sudo mkdir -p /var/lib/cyber-range
+
+# Copy linux-client binary
+sudo cp linux-client /var/lib/cyber-range/
+sudo chmod +x /var/lib/cyber-range/linux-client
+
+# Create systemd service
+sudo tee /etc/systemd/system/cyber-range-config.service << 'EOF'
+[Unit]
+Description=Cyber Range Configuration Client
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/var/lib/cyber-range/linux-client -server "http://YOUR_SERVER_IP:8080"
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable service
+sudo systemctl daemon-reload
+sudo systemctl enable cyber-range-config.service
+```
+
+Then snapshot/export the image.
+
+### 5. Deploy
 
 Copy to your OpenTofu box:
 - `server` binary
@@ -198,6 +236,48 @@ lxc list --format json > instances.json
   - `eth1`, `eth-1` → `lan`
   - `eth2`, `eth-2` → `lan2`
 - Restarts network service to apply changes
+
+### Linux Client Setup
+
+1. Copy `linux-client` to `/var/lib/cyber-range/`
+
+2. Create systemd service:
+   ```bash
+   sudo tee /etc/systemd/system/cyber-range-config.service << 'EOF'
+   [Unit]
+   Description=Cyber Range Configuration Client
+   After=network-online.target
+   Wants=network-online.target
+
+   [Service]
+   Type=oneshot
+   ExecStart=/var/lib/cyber-range/linux-client -server "http://SERVER_IP:8080"
+   RemainAfterExit=yes
+
+   [Install]
+   WantedBy=multi-user.target
+   EOF
+   
+   sudo systemctl daemon-reload
+   sudo systemctl enable cyber-range-config.service
+   ```
+
+3. Snapshot the VM as your new base image
+
+**What it does:**
+- Sets hostname via `hostnamectl` (works on all systemd-based distros)
+- Auto-detects and configures network using:
+  1. NetworkManager (`nmcli`) - if available and running
+  2. Netplan - if `/etc/netplan/` exists (Ubuntu 18.04+)
+  3. ifupdown - if `/etc/network/interfaces` exists (older Debian)
+- Reboots to ensure all changes take effect
+
+**Supported Distros:**
+- Ubuntu 16.04+
+- Debian 8+
+- RHEL/CentOS 7+
+- Fedora
+- Any systemd-based distribution
 
 ### Terraform Configuration
 
@@ -343,6 +423,39 @@ client.exe -server http://server:8080
 | `eth2`, `eth-2` | `lan2` |
 | `eth3`, `eth-3` | `lan3` |
 
+### Linux Client
+
+**Command line:**
+```bash
+./linux-client -server http://server:8080
+```
+
+**Flags:**
+| Flag | Description |
+|------|-------------|
+| `-server` | Server URL (required) |
+| `-interface` | Specific network interface name |
+| `-no-delay` | Skip random startup delay |
+
+**Files:**
+| Path | Description |
+|------|-------------|
+| `/var/lib/cyber-range/linux-client` | Client binary |
+| `/var/lib/cyber-range/.configured` | Marker file (prevents re-run) |
+| `/var/lib/cyber-range/config.log` | Log file |
+
+**Network Configuration Methods (auto-detected):**
+| Method | Detection | Distros |
+|--------|-----------|---------|
+| NetworkManager | `nmcli` exists and service running | Most modern distros |
+| Netplan | `/etc/netplan/` exists | Ubuntu 18.04+ |
+| ifupdown | `/etc/network/interfaces` exists | Older Debian/Ubuntu |
+
+**Retry Behavior:**
+- Linux and OpenWrt clients retry for up to **60 minutes** (60 retries × 60 seconds)
+- This allows time for long infrastructure builds to complete
+- Windows client uses a shorter retry window
+
 ---
 
 ## Troubleshooting
@@ -352,6 +465,11 @@ client.exe -server http://server:8080
 **Windows:**
 ```
 C:\ProgramData\cyber-range\config.log
+```
+
+**Linux:**
+```bash
+cat /var/lib/cyber-range/config.log
 ```
 
 **OpenWrt:**
@@ -388,6 +506,16 @@ Remove-Item "C:\ProgramData\cyber-range\config.log" -Force
 Restart-Computer
 ```
 
+### Reset a Linux VM
+
+```bash
+sudo rm /var/lib/cyber-range/.configured
+sudo rm /var/lib/cyber-range/config.log
+sudo systemctl restart cyber-range-config.service
+# Or reboot:
+sudo reboot
+```
+
 ### Reset an OpenWrt Container
 
 ```bash
@@ -417,6 +545,7 @@ Cyber_Range/
 │   ├── server/main.go           # Server entry point
 │   └── client/
 │       ├── windows/main.go      # Windows client
+│       ├── linux/main.go        # Linux client
 │       └── openwrt/main.go      # OpenWrt client
 ├── internal/
 │   ├── config/types.go          # Shared types
@@ -427,6 +556,11 @@ Cyber_Range/
 │       ├── windows/
 │       │   ├── hostname.go      # Hostname change
 │       │   ├── network.go       # Network config (netsh)
+│       │   ├── reboot.go        # System reboot
+│       │   └── marker.go        # Run-once marker
+│       ├── linux/
+│       │   ├── hostname.go      # Hostname change (hostnamectl)
+│       │   ├── network.go       # Network config (auto-detect)
 │       │   ├── reboot.go        # System reboot
 │       │   └── marker.go        # Run-once marker
 │       └── openwrt/

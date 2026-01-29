@@ -78,7 +78,7 @@ run_tofu_destroy() {
 # Kill config server if running
 stop_server() {
     log_info "Stopping config server if running..."
-    pkill -f "./server" 2>/dev/null || true
+    pgrep -x server | xargs -r kill 2>/dev/null || true
 }
 
 # Main
