@@ -21,17 +21,33 @@ const (
 	NetworkMethodIfupdown
 )
 
-// ConfigureNetwork applies network configuration using the detected method
+// ConfigureNetwork applies network configuration using the detected method (single interface, backwards compat)
 func ConfigureNetwork(cfg config.NetworkConfig) error {
 	method := detectNetworkMethod()
 
 	switch method {
 	case NetworkMethodNetworkManager:
-		return configureNetworkManager(cfg)
+		return configureNetworkManager("", cfg) // Empty string = auto-detect
 	case NetworkMethodNetplan:
-		return configureNetplan(cfg)
+		return configureNetplanSingle(cfg)
 	case NetworkMethodIfupdown:
-		return configureIfupdown(cfg)
+		return configureIfupdownSingle(cfg)
+	default:
+		return fmt.Errorf("no supported network configuration method found")
+	}
+}
+
+// ConfigureAllNetworks applies network configuration for multiple interfaces
+func ConfigureAllNetworks(networks map[string]config.NetworkConfig) error {
+	method := detectNetworkMethod()
+
+	switch method {
+	case NetworkMethodNetworkManager:
+		return configureNetworkManagerAll(networks)
+	case NetworkMethodNetplan:
+		return configureNetplanAll(networks)
+	case NetworkMethodIfupdown:
+		return configureIfupdownAll(networks)
 	default:
 		return fmt.Errorf("no supported network configuration method found")
 	}
@@ -61,12 +77,24 @@ func detectNetworkMethod() NetworkMethod {
 	return NetworkMethodUnknown
 }
 
-// configureNetworkManager configures network using nmcli
-func configureNetworkManager(cfg config.NetworkConfig) error {
-	// Find the primary connection name
-	connName, err := getNMConnectionName()
-	if err != nil {
-		return fmt.Errorf("failed to find NetworkManager connection: %w", err)
+// configureNetworkManager configures a single interface using nmcli
+// If ifaceName is empty, auto-detects the primary connection
+func configureNetworkManager(ifaceName string, cfg config.NetworkConfig) error {
+	var connName string
+	var err error
+
+	if ifaceName == "" {
+		// Auto-detect primary connection
+		connName, err = getNMConnectionName()
+		if err != nil {
+			return fmt.Errorf("failed to find NetworkManager connection: %w", err)
+		}
+	} else {
+		// Find or create connection for specific interface
+		connName, err = getNMConnectionForInterface(ifaceName)
+		if err != nil {
+			return fmt.Errorf("failed to find connection for %s: %w", ifaceName, err)
+		}
 	}
 
 	if cfg.DHCP {
@@ -110,6 +138,25 @@ func configureNetworkManager(cfg config.NetworkConfig) error {
 		}
 	}
 
+	// Add custom routes (works with both DHCP and static)
+	if len(cfg.Routes) > 0 {
+		// Clear existing routes first
+		cmd := exec.Command("nmcli", "connection", "modify", connName, "ipv4.routes", "")
+		cmd.Run() // Ignore error if no routes exist
+
+		// Build routes string: "dest1 nexthop1, dest2 nexthop2"
+		var routeStrs []string
+		for _, route := range cfg.Routes {
+			routeStrs = append(routeStrs, fmt.Sprintf("%s %s", route.To, route.Via))
+		}
+		routesArg := strings.Join(routeStrs, ", ")
+
+		cmd = exec.Command("nmcli", "connection", "modify", connName, "ipv4.routes", routesArg)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("nmcli routes failed: %s - %w", string(output), err)
+		}
+	}
+
 	// Apply the changes by reactivating the connection
 	cmd := exec.Command("nmcli", "connection", "up", connName)
 	if output, err := cmd.CombinedOutput(); err != nil {
@@ -117,6 +164,52 @@ func configureNetworkManager(cfg config.NetworkConfig) error {
 	}
 
 	return nil
+}
+
+// configureNetworkManagerAll configures all interfaces using NetworkManager
+func configureNetworkManagerAll(networks map[string]config.NetworkConfig) error {
+	for ifaceName, cfg := range networks {
+		if err := configureNetworkManager(ifaceName, cfg); err != nil {
+			return fmt.Errorf("failed to configure %s: %w", ifaceName, err)
+		}
+	}
+	return nil
+}
+
+// getNMConnectionForInterface finds or creates a NetworkManager connection for an interface
+func getNMConnectionForInterface(ifaceName string) (string, error) {
+	// First, try to find existing connection for this interface
+	cmd := exec.Command("nmcli", "-t", "-f", "NAME,DEVICE", "connection", "show")
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to list connections: %w", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	for _, line := range lines {
+		parts := strings.Split(line, ":")
+		if len(parts) >= 2 && parts[1] == ifaceName {
+			return parts[0], nil
+		}
+	}
+
+	// No existing connection, try to find by connection name matching interface
+	for _, line := range lines {
+		parts := strings.Split(line, ":")
+		if len(parts) >= 1 && parts[0] == ifaceName {
+			return parts[0], nil
+		}
+	}
+
+	// Still not found - create a new connection
+	connName := fmt.Sprintf("cyber-range-%s", ifaceName)
+	cmd = exec.Command("nmcli", "connection", "add", "type", "ethernet",
+		"con-name", connName, "ifname", ifaceName)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("failed to create connection: %s - %w", string(output), err)
+	}
+
+	return connName, nil
 }
 
 // getNMConnectionName finds the primary NetworkManager connection name
@@ -148,48 +241,70 @@ func getNMConnectionName() (string, error) {
 	return "", fmt.Errorf("no active network connection found")
 }
 
-// configureNetplan configures network using Netplan (Ubuntu 18.04+)
-func configureNetplan(cfg config.NetworkConfig) error {
+// configureNetplanSingle configures a single interface using Netplan (backwards compat)
+func configureNetplanSingle(cfg config.NetworkConfig) error {
 	// Find primary interface
 	ifaceName, err := getPrimaryInterface()
 	if err != nil {
 		return fmt.Errorf("failed to find primary interface: %w", err)
 	}
 
-	var content string
-	if cfg.DHCP {
-		content = fmt.Sprintf(`# Generated by Cyber Range Configuration Client
+	networks := map[string]config.NetworkConfig{
+		ifaceName: cfg,
+	}
+	return configureNetplanAll(networks)
+}
+
+// configureNetplanAll configures all interfaces using Netplan (Ubuntu 18.04+)
+func configureNetplanAll(networks map[string]config.NetworkConfig) error {
+	content := `# Generated by Cyber Range Configuration Client
 network:
   version: 2
   ethernets:
-    %s:
-      dhcp4: true
-`, ifaceName)
-	} else {
-		// Parse CIDR to validate
-		_, _, err := net.ParseCIDR(cfg.Address)
-		if err != nil {
-			return fmt.Errorf("invalid address format: %w", err)
-		}
+`
 
-		content = fmt.Sprintf(`# Generated by Cyber Range Configuration Client
-network:
-  version: 2
-  ethernets:
-    %s:
-      dhcp4: false
-      addresses:
-        - %s
-`, ifaceName, cfg.Address)
+	for ifaceName, cfg := range networks {
+		content += fmt.Sprintf("    %s:\n", ifaceName)
 
-		if cfg.Gateway != "" {
-			content += fmt.Sprintf("      routes:\n        - to: default\n          via: %s\n", cfg.Gateway)
-		}
+		if cfg.DHCP {
+			content += "      dhcp4: true\n"
+			// Add custom routes for DHCP
+			if len(cfg.Routes) > 0 {
+				content += "      routes:\n"
+				for _, route := range cfg.Routes {
+					content += fmt.Sprintf("        - to: %s\n          via: %s\n", route.To, route.Via)
+				}
+			}
+		} else {
+			content += "      dhcp4: false\n"
 
-		if len(cfg.DNS) > 0 {
-			content += "      nameservers:\n        addresses:\n"
-			for _, dns := range cfg.DNS {
-				content += fmt.Sprintf("          - %s\n", dns)
+			// Validate and add address
+			if cfg.Address != "" {
+				_, _, err := net.ParseCIDR(cfg.Address)
+				if err != nil {
+					return fmt.Errorf("invalid address format for %s: %w", ifaceName, err)
+				}
+				content += "      addresses:\n"
+				content += fmt.Sprintf("        - %s\n", cfg.Address)
+			}
+
+			// Add routes section if we have gateway or custom routes
+			if cfg.Gateway != "" || len(cfg.Routes) > 0 {
+				content += "      routes:\n"
+				if cfg.Gateway != "" {
+					content += fmt.Sprintf("        - to: default\n          via: %s\n", cfg.Gateway)
+				}
+				for _, route := range cfg.Routes {
+					content += fmt.Sprintf("        - to: %s\n          via: %s\n", route.To, route.Via)
+				}
+			}
+
+			// Add DNS servers
+			if len(cfg.DNS) > 0 {
+				content += "      nameservers:\n        addresses:\n"
+				for _, dns := range cfg.DNS {
+					content += fmt.Sprintf("          - %s\n", dns)
+				}
 			}
 		}
 	}
@@ -209,43 +324,54 @@ network:
 	return nil
 }
 
-// configureIfupdown configures network using /etc/network/interfaces (older Debian)
-func configureIfupdown(cfg config.NetworkConfig) error {
+// configureIfupdownSingle configures a single interface using ifupdown (backwards compat)
+func configureIfupdownSingle(cfg config.NetworkConfig) error {
 	// Find primary interface
 	ifaceName, err := getPrimaryInterface()
 	if err != nil {
 		return fmt.Errorf("failed to find primary interface: %w", err)
 	}
 
-	var content string
-	if cfg.DHCP {
-		content = fmt.Sprintf(`# Generated by Cyber Range Configuration Client
-auto %s
-iface %s inet dhcp
-`, ifaceName, ifaceName)
-	} else {
-		// Parse CIDR address
-		ip, ipNet, err := net.ParseCIDR(cfg.Address)
-		if err != nil {
-			return fmt.Errorf("invalid address format: %w", err)
+	networks := map[string]config.NetworkConfig{
+		ifaceName: cfg,
+	}
+	return configureIfupdownAll(networks)
+}
+
+// configureIfupdownAll configures all interfaces using /etc/network/interfaces (older Debian)
+func configureIfupdownAll(networks map[string]config.NetworkConfig) error {
+	content := "# Generated by Cyber Range Configuration Client\n"
+
+	for ifaceName, cfg := range networks {
+		if cfg.DHCP {
+			content += fmt.Sprintf("\nauto %s\niface %s inet dhcp\n", ifaceName, ifaceName)
+		} else {
+			// Parse CIDR address
+			ip, ipNet, err := net.ParseCIDR(cfg.Address)
+			if err != nil {
+				return fmt.Errorf("invalid address format for %s: %w", ifaceName, err)
+			}
+
+			// Convert netmask to dotted decimal
+			mask := net.IP(ipNet.Mask).String()
+
+			content += fmt.Sprintf("\nauto %s\niface %s inet static\n", ifaceName, ifaceName)
+			content += fmt.Sprintf("    address %s\n", ip.String())
+			content += fmt.Sprintf("    netmask %s\n", mask)
+
+			if cfg.Gateway != "" {
+				content += fmt.Sprintf("    gateway %s\n", cfg.Gateway)
+			}
+
+			if len(cfg.DNS) > 0 {
+				content += fmt.Sprintf("    dns-nameservers %s\n", strings.Join(cfg.DNS, " "))
+			}
 		}
 
-		// Convert netmask to dotted decimal
-		mask := net.IP(ipNet.Mask).String()
-
-		content = fmt.Sprintf(`# Generated by Cyber Range Configuration Client
-auto %s
-iface %s inet static
-    address %s
-    netmask %s
-`, ifaceName, ifaceName, ip.String(), mask)
-
-		if cfg.Gateway != "" {
-			content += fmt.Sprintf("    gateway %s\n", cfg.Gateway)
-		}
-
-		if len(cfg.DNS) > 0 {
-			content += fmt.Sprintf("    dns-nameservers %s\n", strings.Join(cfg.DNS, " "))
+		// Add custom routes using post-up commands (works with both DHCP and static)
+		for _, route := range cfg.Routes {
+			content += fmt.Sprintf("    post-up ip route add %s via %s\n", route.To, route.Via)
+			content += fmt.Sprintf("    pre-down ip route del %s via %s\n", route.To, route.Via)
 		}
 	}
 
@@ -262,14 +388,12 @@ iface %s inet static
 	}
 
 	// Restart networking
-	// Try systemctl first, fall back to ifdown/ifup
 	cmd := exec.Command("systemctl", "restart", "networking")
 	if err := cmd.Run(); err != nil {
-		// Fallback: ifdown/ifup
-		exec.Command("ifdown", ifaceName).Run()
-		cmd = exec.Command("ifup", ifaceName)
-		if output, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("failed to bring up interface: %s - %w", string(output), err)
+		// Fallback: restart each interface individually
+		for ifaceName := range networks {
+			exec.Command("ifdown", ifaceName).Run()
+			exec.Command("ifup", ifaceName).Run()
 		}
 	}
 

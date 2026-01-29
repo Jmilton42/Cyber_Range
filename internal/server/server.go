@@ -183,27 +183,31 @@ func (s *Server) parseAllNetworkConfigs(instance *config.LXDInstance) map[string
 	for ifaceName, eth := range cloudInit.Ethernets {
 		netConfig := config.NetworkConfig{DHCP: eth.DHCP4}
 
-		if !eth.DHCP4 {
-			// Get first address
-			if len(eth.Addresses) > 0 {
-				netConfig.Address = eth.Addresses[0]
-			}
-
-			// Get gateway from gateway4 or routes
-			if eth.Gateway4 != "" {
-				netConfig.Gateway = eth.Gateway4
-			} else {
-				for _, route := range eth.Routes {
-					if route.To == "default" || route.To == "0.0.0.0/0" {
-						netConfig.Gateway = route.Via
-						break
-					}
-				}
-			}
-
-			// Get DNS servers
-			netConfig.DNS = eth.Nameservers.Addresses
+		// Get first address (for static IP)
+		if len(eth.Addresses) > 0 {
+			netConfig.Address = eth.Addresses[0]
 		}
+
+		// Get gateway from gateway4
+		if eth.Gateway4 != "" {
+			netConfig.Gateway = eth.Gateway4
+		}
+
+		// Process routes - extract default gateway and collect custom routes
+		for _, route := range eth.Routes {
+			if route.To == "default" || route.To == "0.0.0.0/0" {
+				// Use as gateway if not already set
+				if netConfig.Gateway == "" {
+					netConfig.Gateway = route.Via
+				}
+			} else {
+				// Custom route - add to routes list
+				netConfig.Routes = append(netConfig.Routes, route)
+			}
+		}
+
+		// Get DNS servers
+		netConfig.DNS = eth.Nameservers.Addresses
 
 		networks[ifaceName] = netConfig
 	}

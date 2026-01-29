@@ -93,8 +93,22 @@ func main() {
 
 	// Apply network configuration
 	log.Println("Configuring network...")
-	if err := linux.ConfigureNetwork(cfg.Network); err != nil {
-		log.Fatalf("Failed to configure network: %v", err)
+
+	// Check if we have multiple networks
+	if len(cfg.Networks) > 0 {
+		log.Printf("Found %d network interface(s) to configure", len(cfg.Networks))
+		for ifaceName, netCfg := range cfg.Networks {
+			log.Printf("  - %s: dhcp=%v, address=%s, routes=%d", ifaceName, netCfg.DHCP, netCfg.Address, len(netCfg.Routes))
+		}
+		if err := linux.ConfigureAllNetworks(cfg.Networks); err != nil {
+			log.Fatalf("Failed to configure networks: %v", err)
+		}
+	} else {
+		// Fallback to single network (backwards compatibility)
+		log.Printf("Using single network config: dhcp=%v, address=%s", cfg.Network.DHCP, cfg.Network.Address)
+		if err := linux.ConfigureNetwork(cfg.Network); err != nil {
+			log.Fatalf("Failed to configure network: %v", err)
+		}
 	}
 	log.Println("Network configured successfully")
 

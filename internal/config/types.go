@@ -19,6 +19,7 @@ type NetworkConfig struct {
 	Address string   `json:"address,omitempty"` // CIDR format: 192.168.1.100/24
 	Gateway string   `json:"gateway,omitempty"`
 	DNS     []string `json:"dns,omitempty"`
+	Routes  []Route  `json:"routes,omitempty"` // Custom routes (non-default)
 }
 
 // LXDInstance represents an instance from lxc list --format json
