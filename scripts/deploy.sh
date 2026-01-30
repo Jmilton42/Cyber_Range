@@ -29,6 +29,20 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Get server listen address from config.yaml
+get_listen_address() {
+    if [ -f "config.yaml" ]; then
+        # Extract listen value using grep/sed
+        addr=$(grep -E "^listen:" config.yaml | sed 's/listen:[[:space:]]*//' | tr -d '"' | tr -d "'")
+        if [ -n "$addr" ]; then
+            echo "$addr"
+            return
+        fi
+    fi
+    # Default fallback
+    echo ":${SERVER_PORT}"
+}
+
 init_subnets_file() {
     if [ ! -f "$SUBNETS_FILE" ]; then
         log_info "Creating subnets file: $SUBNETS_FILE"
@@ -124,13 +138,15 @@ export_instances() {
 
 # Start the config server
 start_server() {
-    log_info "Starting configuration server on port $SERVER_PORT..."
+    # Get listen address from config.yaml
+    LISTEN_ADDR=$(get_listen_address)
+    log_info "Starting configuration server on $LISTEN_ADDR..."
     
     # Kill any existing server
     pgrep -x server | xargs -r kill 2>/dev/null || true
     
     # Start server in background with idle timeout
-    nohup ./server -listen "10.0.14.6:$SERVER_PORT" -instances "$INSTANCES_FILE" -idle-timeout "$IDLE_TIMEOUT" > server.log 2>&1 &
+    nohup ./server -listen "$LISTEN_ADDR" -instances "$INSTANCES_FILE" -idle-timeout "$IDLE_TIMEOUT" > server.log 2>&1 &
     SERVER_PID=$!
     
     sleep 2
@@ -170,10 +186,13 @@ main() {
     start_server
     start_win
     
+    # Get listen address for output
+    LISTEN_ADDR=$(get_listen_address)
+    
     echo ""
     log_info "Deployment complete!"
     echo ""
-    echo "Server running at: http://10.0.14.6:$SERVER_PORT"
+    echo "Server running at: http://${LISTEN_ADDR}"
     echo "Idle timeout: $IDLE_TIMEOUT (server will auto-shutdown after no requests)"
     echo ""
     echo "Endpoints:"

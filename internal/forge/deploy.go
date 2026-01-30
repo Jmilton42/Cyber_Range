@@ -11,24 +11,49 @@ import (
 
 // DeployConfig holds deployment configuration
 type DeployConfig struct {
-	ServerBinary    string
-	ServerPort      string
-	ServerIP        string
-	InstancesFile   string
-	IdleTimeout     string
-	StartWinScript  string
+	ServerBinary   string
+	ServerPort     string
+	ServerIP       string
+	InstancesFile  string
+	IdleTimeout    string
+	StartWinScript string
 }
 
-// DefaultDeployConfig returns default deployment configuration
+// DefaultDeployConfig returns deployment configuration, reading from config.yaml if available
 func DefaultDeployConfig() DeployConfig {
-	return DeployConfig{
-		ServerBinary:   "/home/ceroc/InSPIRE/bin/server",
+	// Start with hardcoded defaults
+	config := DeployConfig{
+		ServerBinary:   ServerBinary,
 		ServerPort:     "8080",
 		ServerIP:       "10.0.14.6",
 		InstancesFile:  "instances.json",
 		IdleTimeout:    "5m",
 		StartWinScript: "/home/ceroc/InSPIRE/bin/scripts/start_win.sh",
 	}
+
+	// Try to load from config.yaml
+	cfg, err := LoadForgeConfig()
+	if err != nil {
+		// Config file not found or invalid - use defaults
+		return config
+	}
+
+	// Override with config.yaml values
+	if cfg.Listen != "" {
+		ip, port := ParseListenAddress(cfg.Listen)
+		if ip != "" {
+			config.ServerIP = ip
+		}
+		if port != "" {
+			config.ServerPort = port
+		}
+	}
+
+	if cfg.IdleTimeout != "" {
+		config.IdleTimeout = cfg.IdleTimeout
+	}
+
+	return config
 }
 
 // WaitForVMs waits for VMs to initialize

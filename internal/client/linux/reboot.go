@@ -3,24 +3,35 @@ package linux
 import (
 	"fmt"
 	"os/exec"
+	"time"
 )
 
 // Reboot initiates a system reboot after the specified delay in seconds
 func Reboot(delaySeconds int) error {
-	// Use shutdown command which works on all Linux distros
-	// -r = reboot, +N = delay in minutes (we convert seconds to "+0" for immediate or use "now")
-	var cmd *exec.Cmd
-	if delaySeconds <= 0 {
-		cmd = exec.Command("shutdown", "-r", "now")
-	} else {
-		// shutdown uses minutes, so for seconds delay we use sleep + shutdown
-		// For simplicity, if delay > 0, sleep first then reboot
-		cmd = exec.Command("sh", "-c", fmt.Sprintf("sleep %d && shutdown -r now", delaySeconds))
+	// Wait for delay (allows logs to flush)
+	if delaySeconds > 0 {
+		time.Sleep(time.Duration(delaySeconds) * time.Second)
 	}
 
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to initiate reboot: %w", err)
+	// Try multiple reboot methods in order of preference
+	// Different Linux systems have different commands available
+	methods := [][]string{
+		{"systemctl", "reboot"},   // systemd (most modern distros)
+		{"shutdown", "-r", "now"}, // traditional
+		{"reboot"},                // simple command
+		{"/sbin/reboot"},          // explicit path
+		{"init", "6"},             // SysV init
 	}
 
-	return nil
+	var lastErr error
+	for _, method := range methods {
+		cmd := exec.Command(method[0], method[1:]...)
+		if err := cmd.Start(); err == nil {
+			return nil // Success - reboot initiated
+		} else {
+			lastErr = err
+		}
+	}
+
+	return fmt.Errorf("all reboot methods failed, last error: %w", lastErr)
 }

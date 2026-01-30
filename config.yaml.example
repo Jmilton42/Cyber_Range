@@ -1,8 +1,14 @@
-# Cyber Range Config Server
+# Cyber Range Config
 # Copy to config.yaml and adjust values
+# Used by both server binary and forge
 
-# Server listen address
+# Server listen address (IP:port or :port for all interfaces)
+# Examples: "10.8.11.202:8080", ":8080"
 listen: ":8080"
 
 # Path to LXD instances JSON file (from lxc list --format json)
 instances_file: "./instances.json"
+
+# Auto-shutdown timeout (server shuts down after this much inactivity)
+# Examples: "5m", "15m", "1h", "0" (disabled)
+idle_timeout: "5m"
