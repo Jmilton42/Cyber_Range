@@ -136,3 +136,84 @@ func CommitNetworkChanges() error {
 	}
 	return nil
 }
+
+// AddInterfaceToFirewallZone adds a UCI interface to a firewall zone (e.g., "lan" zone)
+// zoneName is typically "lan" or "wan"
+func AddInterfaceToFirewallZone(uciInterface string, zoneName string) error {
+	// Find the zone index by name
+	zoneIndex, err := findFirewallZoneIndex(zoneName)
+	if err != nil {
+		return fmt.Errorf("failed to find firewall zone %s: %w", zoneName, err)
+	}
+
+	// Add the interface to the zone's network list
+	cmd := exec.Command("uci", "add_list", fmt.Sprintf("firewall.@zone[%d].network=%s", zoneIndex, uciInterface))
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to add %s to firewall zone %s: %s - %w", uciInterface, zoneName, string(output), err)
+	}
+
+	return nil
+}
+
+// findFirewallZoneIndex finds the index of a firewall zone by name
+func findFirewallZoneIndex(zoneName string) (int, error) {
+	// Get list of zones and find the one with matching name
+	for i := 0; i < 10; i++ { // Check up to 10 zones
+		cmd := exec.Command("uci", "get", fmt.Sprintf("firewall.@zone[%d].name", i))
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			// No more zones
+			break
+		}
+		name := strings.TrimSpace(string(output))
+		if name == zoneName {
+			return i, nil
+		}
+	}
+	return -1, fmt.Errorf("zone %s not found", zoneName)
+}
+
+// AddInterfaceToDNS adds a UCI interface to dnsmasq listen interfaces
+func AddInterfaceToDNS(uciInterface string) error {
+	cmd := exec.Command("uci", "add_list", fmt.Sprintf("dhcp.@dnsmasq[0].interface=%s", uciInterface))
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to add %s to DNS listen interfaces: %s - %w", uciInterface, string(output), err)
+	}
+	return nil
+}
+
+// CommitFirewallChanges commits all UCI firewall changes
+func CommitFirewallChanges() error {
+	cmd := exec.Command("uci", "commit", "firewall")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to commit firewall changes: %s - %w", string(output), err)
+	}
+	return nil
+}
+
+// CommitDHCPChanges commits all UCI DHCP/DNS changes
+func CommitDHCPChanges() error {
+	cmd := exec.Command("uci", "commit", "dhcp")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to commit DHCP changes: %s - %w", string(output), err)
+	}
+	return nil
+}
+
+// RestartFirewall restarts the firewall service to apply changes
+func RestartFirewall() error {
+	cmd := exec.Command("/etc/init.d/firewall", "restart")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to restart firewall: %s - %w", string(output), err)
+	}
+	return nil
+}
+
+// RestartDNSMasq restarts the dnsmasq service to apply changes
+func RestartDNSMasq() error {
+	cmd := exec.Command("/etc/init.d/dnsmasq", "restart")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to restart dnsmasq: %s - %w", string(output), err)
+	}
+	return nil
+}

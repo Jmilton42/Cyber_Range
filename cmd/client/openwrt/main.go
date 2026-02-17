@@ -93,10 +93,34 @@ func main() {
 				log.Printf("Warning: Failed to configure %s: %v", uciName, err)
 				// Continue with other interfaces
 			}
+
+			// Add interface to firewall zone (all non-wan interfaces go to lan zone)
+			firewallZone := "lan"
+			if uciName == "wan" {
+				firewallZone = "wan"
+			}
+			log.Printf("Adding %s to firewall zone: %s", uciName, firewallZone)
+			if err := openwrt.AddInterfaceToFirewallZone(uciName, firewallZone); err != nil {
+				log.Printf("Warning: Failed to add %s to firewall zone: %v", uciName, err)
+			}
+
+			// Add interface to DNS listen interfaces (except wan)
+			if uciName != "wan" {
+				log.Printf("Adding %s to DNS listen interfaces", uciName)
+				if err := openwrt.AddInterfaceToDNS(uciName); err != nil {
+					log.Printf("Warning: Failed to add %s to DNS: %v", uciName, err)
+				}
+			}
 		}
 		// Commit all changes at once
 		if err := openwrt.CommitNetworkChanges(); err != nil {
 			log.Fatalf("Failed to commit network changes: %v", err)
+		}
+		if err := openwrt.CommitFirewallChanges(); err != nil {
+			log.Printf("Warning: Failed to commit firewall changes: %v", err)
+		}
+		if err := openwrt.CommitDHCPChanges(); err != nil {
+			log.Printf("Warning: Failed to commit DHCP changes: %v", err)
 		}
 	} else {
 		// Fallback to single network (backwards compatibility)
@@ -104,8 +128,27 @@ func main() {
 		if err := openwrt.ConfigureInterface("lan", cfg.Network); err != nil {
 			log.Fatalf("Failed to configure network: %v", err)
 		}
+
+		// Add lan to firewall zone (should already be there, but ensure it)
+		log.Println("Adding lan to firewall zone: lan")
+		if err := openwrt.AddInterfaceToFirewallZone("lan", "lan"); err != nil {
+			log.Printf("Warning: Failed to add lan to firewall zone: %v", err)
+		}
+
+		// Add lan to DNS listen interfaces
+		log.Println("Adding lan to DNS listen interfaces")
+		if err := openwrt.AddInterfaceToDNS("lan"); err != nil {
+			log.Printf("Warning: Failed to add lan to DNS: %v", err)
+		}
+
 		if err := openwrt.CommitNetworkChanges(); err != nil {
 			log.Fatalf("Failed to commit network changes: %v", err)
+		}
+		if err := openwrt.CommitFirewallChanges(); err != nil {
+			log.Printf("Warning: Failed to commit firewall changes: %v", err)
+		}
+		if err := openwrt.CommitDHCPChanges(); err != nil {
+			log.Printf("Warning: Failed to commit DHCP changes: %v", err)
 		}
 	}
 	log.Println("Network configured successfully")
@@ -117,7 +160,7 @@ func main() {
 	log.Println("Marker file created.")
 
 	log.Println("=== Configuration Complete ===")
-	log.Println("Restarting network service...")
+	log.Println("Restarting services...")
 
 	// Restart network to apply changes
 	if err := openwrt.RestartNetwork(); err != nil {
@@ -125,6 +168,20 @@ func main() {
 		log.Println("You may need to restart the network manually or reboot.")
 	} else {
 		log.Println("Network service restarted successfully")
+	}
+
+	// Restart firewall to apply changes
+	if err := openwrt.RestartFirewall(); err != nil {
+		log.Printf("Warning: Failed to restart firewall: %v", err)
+	} else {
+		log.Println("Firewall service restarted successfully")
+	}
+
+	// Restart dnsmasq to apply DNS changes
+	if err := openwrt.RestartDNSMasq(); err != nil {
+		log.Printf("Warning: Failed to restart dnsmasq: %v", err)
+	} else {
+		log.Println("DNSMasq service restarted successfully")
 	}
 }
 
