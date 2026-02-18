@@ -10,15 +10,16 @@ import (
 )
 
 // InterfaceMapping maps cloud-init interface names to OpenWrt UCI interface names
+// You can customize these names - e.g., change "lan2" to "dmz"
 var InterfaceMapping = map[string]string{
-	"eth0":   "wan",
-	"eth-0":  "wan",
-	"eth1":   "lan",
-	"eth-1":  "lan",
-	"eth2":   "lan2",
-	"eth-2":  "lan2",
-	"eth3":   "lan3",
-	"eth-3":  "lan3",
+	"eth0":  "wan",
+	"eth-0": "wan",
+	"eth1":  "lan",
+	"eth-1": "lan",
+	"eth2":  "dmz", // Changed from lan2 to dmz
+	"eth-2": "dmz",
+	"eth3":  "lan3",
+	"eth-3": "lan3",
 }
 
 // MapInterfaceName maps a cloud-init interface name to OpenWrt UCI interface name
@@ -41,11 +42,17 @@ func MapInterfaceName(cloudInitName string) string {
 
 // ConfigureNetwork applies network configuration to lan interface (legacy)
 func ConfigureNetwork(cfg config.NetworkConfig) error {
-	return ConfigureInterface("lan", cfg)
+	return ConfigureInterface("lan", "eth1", cfg)
 }
 
 // ConfigureInterface applies network configuration to a specific UCI interface
-func ConfigureInterface(uciInterface string, cfg config.NetworkConfig) error {
+// physicalDevice is the Linux device name (e.g., eth0, eth1, eth2)
+func ConfigureInterface(uciInterface string, physicalDevice string, cfg config.NetworkConfig) error {
+	// Ensure the UCI interface exists and is bound to the physical device
+	if err := EnsureInterfaceExists(uciInterface, physicalDevice); err != nil {
+		return fmt.Errorf("failed to ensure interface exists: %w", err)
+	}
+
 	if cfg.DHCP {
 		return configureInterfaceDHCP(uciInterface)
 	}
@@ -73,6 +80,28 @@ func configureInterfaceDHCP(uciInterface string) error {
 		} else {
 			cmd.Run() // Ignore error for delete
 		}
+	}
+
+	return nil
+}
+
+// EnsureInterfaceExists creates a UCI interface if it doesn't exist and binds it to the physical device
+func EnsureInterfaceExists(uciInterface string, physicalDevice string) error {
+	// Check if interface already exists
+	checkCmd := exec.Command("uci", "get", fmt.Sprintf("network.%s", uciInterface))
+	if err := checkCmd.Run(); err != nil {
+		// Interface doesn't exist, create it
+		createCmd := exec.Command("uci", "set", fmt.Sprintf("network.%s=interface", uciInterface))
+		if output, err := createCmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("failed to create interface %s: %s - %w", uciInterface, string(output), err)
+		}
+	}
+
+	// Bind to physical device (using 'device' for DSA, falling back to 'ifname' for older OpenWrt)
+	// Try device first (OpenWrt 21.02+)
+	deviceCmd := exec.Command("uci", "set", fmt.Sprintf("network.%s.device=%s", uciInterface, physicalDevice))
+	if output, err := deviceCmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to set device for %s: %s - %w", uciInterface, string(output), err)
 	}
 
 	return nil

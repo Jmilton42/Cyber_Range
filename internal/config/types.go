@@ -20,6 +20,7 @@ type NetworkConfig struct {
 	Gateway string   `json:"gateway,omitempty"`
 	DNS     []string `json:"dns,omitempty"`
 	Routes  []Route  `json:"routes,omitempty"` // Custom routes (non-default)
+	UCIName string   `json:"uci_name,omitempty"` // Custom UCI interface name for OpenWRT (e.g., "dmz", "servers")
 }
 
 // LXDInstance represents an instance from lxc list --format json
@@ -36,11 +37,12 @@ type CloudInitNetwork struct {
 
 // CloudInitEthernet represents an ethernet device in cloud-init
 type CloudInitEthernet struct {
-	DHCP4       bool     `yaml:"dhcp4"`
-	Addresses   []string `yaml:"addresses"`
-	Gateway4    string   `yaml:"gateway4"`
-	Routes      []Route  `yaml:"routes"`
-	Nameservers struct {
+	DHCP4        bool     `yaml:"dhcp4"`
+	Addresses    []string `yaml:"addresses"`
+	Gateway4     string   `yaml:"gateway4"`
+	Routes       []Route  `yaml:"routes"`
+	XOpenWrtName string   `yaml:"x-openwrt-name"` // Custom UCI interface name (e.g., "dmz")
+	Nameservers  struct {
 		Addresses []string `yaml:"addresses"`
 	} `yaml:"nameservers"`
 }

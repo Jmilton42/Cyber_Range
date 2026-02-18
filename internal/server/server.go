@@ -183,6 +183,11 @@ func (s *Server) parseAllNetworkConfigs(instance *config.LXDInstance) map[string
 	for ifaceName, eth := range cloudInit.Ethernets {
 		netConfig := config.NetworkConfig{DHCP: eth.DHCP4}
 
+		// Get custom UCI interface name if specified
+		if eth.XOpenWrtName != "" {
+			netConfig.UCIName = eth.XOpenWrtName
+		}
+
 		// Get first address (for static IP)
 		if len(eth.Addresses) > 0 {
 			netConfig.Address = eth.Addresses[0]

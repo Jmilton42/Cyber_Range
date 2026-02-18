@@ -87,9 +87,13 @@ func main() {
 	if len(cfg.Networks) > 0 {
 		log.Printf("Found %d network interface(s) to configure", len(cfg.Networks))
 		for cloudInitName, netCfg := range cfg.Networks {
-			uciName := openwrt.MapInterfaceName(cloudInitName)
+			// Use custom UCI name if specified, otherwise use mapping
+			uciName := netCfg.UCIName
+			if uciName == "" {
+				uciName = openwrt.MapInterfaceName(cloudInitName)
+			}
 			log.Printf("Configuring %s -> UCI %s: dhcp=%v, address=%s", cloudInitName, uciName, netCfg.DHCP, netCfg.Address)
-			if err := openwrt.ConfigureInterface(uciName, netCfg); err != nil {
+			if err := openwrt.ConfigureInterface(uciName, cloudInitName, netCfg); err != nil {
 				log.Printf("Warning: Failed to configure %s: %v", uciName, err)
 				// Continue with other interfaces
 			}
@@ -125,7 +129,7 @@ func main() {
 	} else {
 		// Fallback to single network (backwards compatibility)
 		log.Printf("Using single network config: dhcp=%v, address=%s", cfg.Network.DHCP, cfg.Network.Address)
-		if err := openwrt.ConfigureInterface("lan", cfg.Network); err != nil {
+		if err := openwrt.ConfigureInterface("lan", "eth1", cfg.Network); err != nil {
 			log.Fatalf("Failed to configure network: %v", err)
 		}
 
