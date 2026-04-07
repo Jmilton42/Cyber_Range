@@ -4,12 +4,37 @@
 
 set -e
 
+# Resolve script directory (so we can find repo-relative defaults)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Configuration - modify these
 PROJECT_NAME="${PROJECT_NAME:-dcig}"
 SERVER_PORT="${SERVER_PORT:-8080}"
 INSTANCES_FILE="${INSTANCES_FILE:-instances.json}"
 IDLE_TIMEOUT="${IDLE_TIMEOUT:-5m}"
-SUBNETS_FILE="${SUBNETS_FILE:-subnets.json}"
+
+# Default SUBNETS_FILE:
+# - In-repo: use examples/subnets.json if present
+# - When copied into a project: default to ./subnets.json
+DEFAULT_SUBNETS_FILE="subnets.json"
+if [ -f "${SCRIPT_DIR}/../examples/subnets.json" ]; then
+    DEFAULT_SUBNETS_FILE="${SCRIPT_DIR}/../examples/subnets.json"
+fi
+SUBNETS_FILE="${SUBNETS_FILE:-$DEFAULT_SUBNETS_FILE}"
+
+# Default server binary:
+# - If running in a project directory that has ./server, use it
+# - If running from this repo, use dist/server if present
+SERVER_BIN="${SERVER_BIN:-}"
+if [ -z "$SERVER_BIN" ]; then
+    if [ -x "./server" ]; then
+        SERVER_BIN="./server"
+    elif [ -x "${SCRIPT_DIR}/../dist/server" ]; then
+        SERVER_BIN="${SCRIPT_DIR}/../dist/server"
+    else
+        SERVER_BIN="./server"
+    fi
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -146,7 +171,7 @@ start_server() {
     pgrep -x server | xargs -r kill 2>/dev/null || true
     
     # Start server in background with idle timeout
-    nohup ./server -listen "$LISTEN_ADDR" -instances "$INSTANCES_FILE" -idle-timeout "$IDLE_TIMEOUT" > server.log 2>&1 &
+    nohup "$SERVER_BIN" -listen "$LISTEN_ADDR" -instances "$INSTANCES_FILE" -idle-timeout "$IDLE_TIMEOUT" > server.log 2>&1 &
     SERVER_PID=$!
     
     sleep 2

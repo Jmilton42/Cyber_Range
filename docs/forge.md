@@ -15,32 +15,32 @@ Forge is a wrapper around OpenTofu that automatically manages guac subnet alloca
 
 ```bash
 cd /path/to/Cyber_Range
-go build -o forge ./cmd/forge
+go build -o ./bin/forge ./cmd/forge
 ```
 
 ### Install to system path
 
 ```bash
 # Build forge
-go build -o forge ./cmd/forge
+go build -o ./bin/forge ./cmd/forge
 
 # Build server (if not already built)
-go build -o server ./cmd/server
+go build -o ./bin/server ./cmd/server
 
 # Move binaries to InSPIRE bin
-mv forge /home/ceroc/InSPIRE/bin/forge_bin/
-mv server /home/ceroc/InSPIRE/bin/
+mv ./bin/forge /home/ceroc/InSPIRE/bin/forge_bin/
+mv ./bin/server /home/ceroc/InSPIRE/bin/
 
 # Or install to system path
-sudo mv forge /usr/local/bin/
-sudo mv server /usr/local/bin/
+sudo mv ./bin/forge /usr/local/bin/
+sudo mv ./bin/server /usr/local/bin/
 ```
 
 ## Setup
 
 1. **Build the binary:**
    ```bash
-   go build -o forge ./cmd/forge
+   go build -o ./bin/forge ./cmd/forge
    ```
 
 2. **Initialize in your first project:**
@@ -88,6 +88,15 @@ forge destroy
 
 # Check current status
 forge status
+```
+
+### Example (from this repo)
+
+This repository includes an example OpenTofu configuration at `infra/tofu/main.tf`. You can run Forge against it like this:
+
+```bash
+./bin/forge -chdir=infra/tofu init
+./bin/forge -chdir=infra/tofu plan
 ```
 
 ### Help

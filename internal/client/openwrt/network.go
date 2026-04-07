@@ -40,6 +40,12 @@ func MapInterfaceName(cloudInitName string) string {
 	return "lan" + name
 }
 
+// NormalizeDeviceName converts cloud-init device names to actual Linux device names
+// e.g., "eth-1" -> "eth1", "eth-2" -> "eth2"
+func NormalizeDeviceName(cloudInitName string) string {
+	return strings.ReplaceAll(cloudInitName, "-", "")
+}
+
 // ConfigureNetwork applies network configuration to lan interface (legacy)
 func ConfigureNetwork(cfg config.NetworkConfig) error {
 	return ConfigureInterface("lan", "eth1", cfg)
@@ -48,6 +54,9 @@ func ConfigureNetwork(cfg config.NetworkConfig) error {
 // ConfigureInterface applies network configuration to a specific UCI interface
 // physicalDevice is the Linux device name (e.g., eth0, eth1, eth2)
 func ConfigureInterface(uciInterface string, physicalDevice string, cfg config.NetworkConfig) error {
+	// Normalize the physical device name (eth-1 -> eth1)
+	physicalDevice = NormalizeDeviceName(physicalDevice)
+
 	// Ensure the UCI interface exists and is bound to the physical device
 	if err := EnsureInterfaceExists(uciInterface, physicalDevice); err != nil {
 		return fmt.Errorf("failed to ensure interface exists: %w", err)

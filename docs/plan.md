@@ -121,17 +121,17 @@ resource "lxd_instance" "lan_windows" {
 
 ```bash
 # Server (Linux)
-GOOS=linux GOARCH=amd64 go build -o server ./cmd/server
+GOOS=linux GOARCH=amd64 go build -o ./bin/server ./cmd/server
 
 # Client (Windows)
-GOOS=windows GOARCH=amd64 go build -o client.exe ./cmd/client
+GOOS=windows GOARCH=amd64 go build -o ./bin/client.exe ./cmd/client/windows
 ```
 
 ## Image Preparation
 
 Bake into `windows-10-base` image:
 1. Copy `client.exe` to `C:\ProgramData\cyber-range\`
-2. Run `setup-task.ps1` to create the Scheduled Task
+2. Run `scripts/setup-task.ps1` to create the Scheduled Task
 3. Snapshot/export the image
 
 ## Implementation Tasks

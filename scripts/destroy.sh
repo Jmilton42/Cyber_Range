@@ -4,9 +4,20 @@
 
 set -e
 
+# Resolve script directory (so we can find repo-relative defaults)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Configuration - modify these
 PROJECT_NAME="${PROJECT_NAME:-homelab-dcig}"
-SUBNETS_FILE="${SUBNETS_FILE:-subnets.json}"
+
+# Default SUBNETS_FILE:
+# - In-repo: use examples/subnets.json if present
+# - When copied into a project: default to ./subnets.json
+DEFAULT_SUBNETS_FILE="subnets.json"
+if [ -f "${SCRIPT_DIR}/../examples/subnets.json" ]; then
+    DEFAULT_SUBNETS_FILE="${SCRIPT_DIR}/../examples/subnets.json"
+fi
+SUBNETS_FILE="${SUBNETS_FILE:-$DEFAULT_SUBNETS_FILE}"
 
 # Colors for output
 RED='\033[0;31m'

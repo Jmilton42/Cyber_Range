@@ -40,16 +40,16 @@ cd Cyber_Range
 go mod tidy
 
 # Build server (Linux)
-$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o server ./cmd/server
+$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o .\\bin\\server ./cmd/server
 
 # Build Windows client
-$env:GOOS="windows"; $env:GOARCH="amd64"; go build -o client.exe ./cmd/client/windows
+$env:GOOS="windows"; $env:GOARCH="amd64"; go build -o .\\bin\\client.exe ./cmd/client/windows
 
 # Build Linux client
-$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o linux-client ./cmd/client/linux
+$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o .\\bin\\linux-client ./cmd/client/linux
 
 # Build OpenWrt client (Linux x86_64)
-$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o openwrt-client ./cmd/client/openwrt
+$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o .\\bin\\openwrt-client ./cmd/client/openwrt
 ```
 
 ### 2. Prepare Windows Base Image
@@ -66,7 +66,7 @@ New-Item -Path "C:\ProgramData\cyber-range" -ItemType Directory -Force
 # Copy client.exe to C:\ProgramData\cyber-range\
 
 # Create scheduled task (as Administrator)
-.\setup-task.ps1 -ServerURL "http://YOUR_SERVER_IP:8080"
+.\scripts\setup-task.ps1 -ServerURL "http://YOUR_SERVER_IP:8080"
 ```
 
 Then snapshot/export the image.
@@ -80,7 +80,7 @@ On your OpenWrt container/VM:
 mkdir -p /etc/cyber-range
 
 # Copy openwrt-client binary
-scp openwrt-client root@openwrt:/etc/cyber-range/
+scp ./bin/openwrt-client root@openwrt:/etc/cyber-range/
 
 # Make executable
 chmod +x /etc/cyber-range/openwrt-client
@@ -111,7 +111,7 @@ On your Linux VM (Ubuntu, Debian, RHEL, CentOS, Fedora, etc.):
 sudo mkdir -p /var/lib/cyber-range
 
 # Copy linux-client binary
-sudo cp linux-client /var/lib/cyber-range/
+sudo cp ./bin/linux-client /var/lib/cyber-range/
 sudo chmod +x /var/lib/cyber-range/linux-client
 
 # Create systemd service
@@ -140,15 +140,16 @@ Then snapshot/export the image.
 ### 5. Deploy
 
 Copy to your OpenTofu box:
-- `server` binary
+- `server` binary (for example, `bin/server` or a prebuilt `dist/server`)
 - `scripts/deploy.sh`
 - Your Terraform files
 
 Run:
 
 ```bash
-chmod +x deploy.sh server
-PROJECT_NAME="homelab-dcig" ./deploy.sh
+chmod +x scripts/deploy.sh
+chmod +x ./server
+PROJECT_NAME="homelab-dcig" ./scripts/deploy.sh
 ```
 
 ---
@@ -162,7 +163,7 @@ The server reads from `instances.json` (exported by `lxc list --format json`).
 **Option A: Use deploy.sh (recommended)**
 
 ```bash
-PROJECT_NAME="homelab-dcig" ./deploy.sh
+PROJECT_NAME="homelab-dcig" ./scripts/deploy.sh
 ```
 
 This will:
@@ -197,7 +198,7 @@ lxc list --format json > instances.json
 
 2. Run setup script as Administrator:
    ```powershell
-   .\setup-task.ps1 -ServerURL "http://SERVER_IP:8080"
+   .\scripts\setup-task.ps1 -ServerURL "http://SERVER_IP:8080"
    ```
 
 3. Snapshot the VM as your new base image
@@ -541,8 +542,10 @@ rm /etc/cyber-range/config.log
 ```
 Cyber_Range/
 ├── go.mod
+├── go.sum
 ├── cmd/
 │   ├── server/main.go           # Server entry point
+│   ├── forge/main.go            # Forge CLI entry point
 │   └── client/
 │       ├── windows/main.go      # Windows client
 │       ├── linux/main.go        # Linux client
@@ -550,6 +553,7 @@ Cyber_Range/
 ├── internal/
 │   ├── config/types.go          # Shared types
 │   ├── server/server.go         # Server logic
+│   ├── forge/                   # Forge implementation
 │   └── client/
 │       ├── common/
 │       │   └── mac.go           # MAC address (shared)
@@ -569,7 +573,18 @@ Cyber_Range/
 │           └── marker.go        # Run-once marker
 ├── scripts/
 │   ├── deploy.sh                # Deployment script
+│   ├── destroy.sh               # Destroy script
 │   └── setup-task.ps1           # Windows task setup
-├── config.yaml.example
-└── SETUP.md
+├── docs/
+│   ├── setup.md                 # Setup guide
+│   └── forge.md                 # Forge CLI docs
+├── configs/
+│   └── config.yaml.example
+├── examples/
+│   ├── subnets.json
+│   └── instances.json
+├── infra/
+│   └── tofu/
+│       └── main.tf              # Example OpenTofu config
+└── dist/                        # Optional prebuilt binaries (if committed)
 ```
