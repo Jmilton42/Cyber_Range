@@ -21,19 +21,15 @@ go build -o ./bin/forge ./cmd/forge
 ### Install to system path
 
 ```bash
-# Build forge
+# Build forge (a single binary that also runs the HTTP config server
+# via `forge serve`, invoked automatically by `forge apply`)
 go build -o ./bin/forge ./cmd/forge
 
-# Build server (if not already built)
-go build -o ./bin/server ./cmd/server
-
-# Move binaries to InSPIRE bin
+# Move binary to InSPIRE bin
 mv ./bin/forge /home/ceroc/InSPIRE/bin/forge_bin/
-mv ./bin/server /home/ceroc/InSPIRE/bin/
 
 # Or install to system path
 sudo mv ./bin/forge /usr/local/bin/
-sudo mv ./bin/server /usr/local/bin/
 ```
 
 ## Setup
@@ -201,14 +197,13 @@ The following defaults are used during deployment:
 
 | Setting | Default Value | Description |
 |---------|---------------|-------------|
-| Server Binary | `/home/ceroc/InSPIRE/bin/server` | Config server binary path |
 | Server IP | `10.0.14.6` | Config server listen address |
 | Server Port | `8080` | Config server port |
 | Idle Timeout | `5m` | Server auto-shutdown after inactivity |
 | Instances File | `instances.json` | LXD instance export file (created in project dir) |
 | Start Win Script | `/home/ceroc/InSPIRE/bin/scripts/start_win.sh` | Windows VM start script |
 
-**Note:** The server binary and scripts are expected to be in `/home/ceroc/InSPIRE/bin/`. Only the `instances.json` file is created in the project directory.
+**Note:** The HTTP configuration server is part of the `forge` binary itself - `forge apply` launches it as a detached `forge serve` child process. There is no separate `server` binary. The Windows start script is expected to be at `/home/ceroc/InSPIRE/bin/scripts/start_win.sh`. Only the `instances.json` file is created in the project directory.
 
 ## Troubleshooting
 

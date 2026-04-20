@@ -8,9 +8,11 @@ import (
 	"io"
 	"log"
 	"math/big"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"cyber-range-config/internal/client/common"
@@ -91,10 +93,18 @@ func main() {
 	}
 	log.Println("Hostname set successfully (requires reboot)")
 
-	// Apply network configuration
-	log.Println("Configuring network...")
-	if err := windows.ConfigureNetwork(cfg.Network); err != nil {
-		log.Fatalf("Failed to configure network: %v", err)
+	// Apply network configuration to each local adapter, matched by MAC.
+	// For single-NIC VMs cfg.Networks may be empty (legacy servers) - fall
+	// back to the old single-shot ConfigureNetwork path in that case.
+	log.Println("Configuring network(s)...")
+	if len(cfg.Networks) > 0 {
+		if err := configureAllAdapters(cfg.Networks); err != nil {
+			log.Fatalf("Failed to configure network: %v", err)
+		}
+	} else {
+		if err := windows.ConfigureNetwork(cfg.Network); err != nil {
+			log.Fatalf("Failed to configure network: %v", err)
+		}
 	}
 	log.Println("Network configured successfully")
 
@@ -111,6 +121,61 @@ func main() {
 	if err := windows.Reboot(5); err != nil {
 		log.Fatalf("Failed to initiate reboot: %v", err)
 	}
+}
+
+// configureAllAdapters walks every non-loopback local adapter with a MAC and
+// applies the config whose key matches that adapter's MAC (lowercase, colon
+// form). Adapters with no matching config are logged and left alone.
+//
+// This replaces the previous single-adapter "guess by name" flow, which would
+// configure whichever adapter happened to sort first as "Ethernet ..." in
+// Windows' enumeration - often not the adapter the config was meant for.
+func configureAllAdapters(networks map[string]config.NetworkConfig) error {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return fmt.Errorf("failed to enumerate local interfaces: %w", err)
+	}
+
+	var (
+		applied  int
+		firstErr error
+	)
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		if len(iface.HardwareAddr) == 0 {
+			continue
+		}
+
+		mac := strings.ToLower(iface.HardwareAddr.String())
+		netCfg, ok := networks[mac]
+		if !ok {
+			log.Printf("No config for adapter %q (MAC %s) - skipping", iface.Name, mac)
+			continue
+		}
+
+		log.Printf("Configuring adapter %q (MAC %s): dhcp=%v address=%s gateway=%s",
+			iface.Name, mac, netCfg.DHCP, netCfg.Address, netCfg.Gateway)
+		if err := windows.ConfigureAdapter(iface.Name, netCfg); err != nil {
+			log.Printf("Failed to configure adapter %q: %v", iface.Name, err)
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		applied++
+	}
+
+	if applied == 0 {
+		if firstErr != nil {
+			return fmt.Errorf("no adapters configured: %w", firstErr)
+		}
+		return fmt.Errorf("no adapters matched any MAC in server response (%d configs available)", len(networks))
+	}
+
+	log.Printf("Configured %d adapter(s)", applied)
+	return firstErr // nil on full success, first error if any adapter failed after at least one succeeded
 }
 
 // randomDelay returns a random number between 0 and max

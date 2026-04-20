@@ -1,9 +1,11 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"cyber-range-config/internal/forge"
 )
@@ -86,6 +88,8 @@ func main() {
 		exitCode = runDestroy(workDir, commandArgs)
 	case "status":
 		exitCode = runStatus(workDir)
+	case "serve":
+		exitCode = runServe(commandArgs)
 	case "version":
 		fmt.Printf("Forge v%s\n", version)
 		exitCode = 0
@@ -113,6 +117,8 @@ Main commands:
 
 Other commands:
   status        Show current project's subnet allocation
+  serve         Run the HTTP configuration server (invoked by 'forge apply';
+                usually not run directly)
   help          Show this help output
   version       Show the current Forge version
 
@@ -131,11 +137,11 @@ On 'forge apply':
   2. Runs tofu apply
   3. Waits for VMs to initialize
   4. Exports LXD instances to instances.json
-  5. Starts config server
+  5. Starts config server (as a detached 'forge serve' child)
   6. Starts Windows VMs
 
 On 'forge destroy':
-  1. Stops config server
+  1. Stops config server (any running 'forge serve')
   2. Runs tofu destroy
   3. Releases subnet allocation
 
@@ -310,6 +316,29 @@ func runDestroy(workDir string, args []string) int {
 	printInfo("Destroy complete!")
 	printInfo(fmt.Sprintf("Subnet 10.0.%d.0/24 has been released and is available for reuse.", releasedOctet))
 
+	return 0
+}
+
+// runServe starts the in-process HTTP configuration server. This is the same
+// code path that `forge apply` re-execs into as a detached child, replacing
+// the old standalone `server` binary.
+func runServe(args []string) int {
+	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
+	listenAddr := fs.String("listen", "", "Listen address, e.g. 10.0.14.6:8080")
+	instancesFile := fs.String("instances", "", "Path to instances JSON file")
+	idleTimeout := fs.Duration("idle-timeout", 15*time.Minute, "Shutdown after this duration of inactivity (0 disables)")
+	if err := fs.Parse(args); err != nil {
+		return 1
+	}
+
+	if err := forge.RunServer(forge.ServeOptions{
+		Listen:        *listenAddr,
+		InstancesFile: *instancesFile,
+		IdleTimeout:   *idleTimeout,
+	}); err != nil {
+		printError(err.Error())
+		return 1
+	}
 	return 0
 }
 

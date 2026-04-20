@@ -120,8 +120,8 @@ resource "lxd_instance" "lan_windows" {
 ## Build Commands
 
 ```bash
-# Server (Linux)
-GOOS=linux GOARCH=amd64 go build -o ./bin/server ./cmd/server
+# Forge (Linux) - CLI + config server (via `forge serve`)
+GOOS=linux GOARCH=amd64 go build -o ./bin/forge ./cmd/forge
 
 # Client (Windows)
 GOOS=windows GOARCH=amd64 go build -o ./bin/client.exe ./cmd/client/windows

@@ -39,8 +39,9 @@ cd Cyber_Range
 # Download dependencies
 go mod tidy
 
-# Build server (Linux)
-$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o .\\bin\\server ./cmd/server
+# Build forge (Linux). The HTTP configuration server is built into the
+# forge binary; `forge apply` launches it as a detached `forge serve` child.
+$env:GOOS="linux"; $env:GOARCH="amd64"; go build -o .\\bin\\forge ./cmd/forge
 
 # Build Windows client
 $env:GOOS="windows"; $env:GOARCH="amd64"; go build -o .\\bin\\client.exe ./cmd/client/windows
@@ -140,7 +141,8 @@ Then snapshot/export the image.
 ### 5. Deploy
 
 Copy to your OpenTofu box:
-- `server` binary (for example, `bin/server` or a prebuilt `dist/server`)
+- `forge` binary (for example, `bin/forge` or a prebuilt `dist/forge`) - runs
+  both the CLI and the HTTP config server (via `forge serve`)
 - `scripts/deploy.sh`
 - Your Terraform files
 
@@ -148,7 +150,7 @@ Run:
 
 ```bash
 chmod +x scripts/deploy.sh
-chmod +x ./server
+chmod +x ./forge
 PROJECT_NAME="homelab-dcig" ./scripts/deploy.sh
 ```
 

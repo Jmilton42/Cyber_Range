@@ -16,25 +16,42 @@ type ForgeConfig struct {
 	IdleTimeout string `yaml:"idle_timeout"` // e.g., "5m"
 }
 
-// ServerBinary is the path to the server binary
-const ServerBinary = "/home/ceroc/InSPIRE/bin/server"
-
-// LoadForgeConfig loads configuration from config.yaml in the server binary's directory
+// LoadForgeConfig loads configuration from config.yaml.
+//
+// Lookup order:
+//  1. $FORGE_CONFIG if set.
+//  2. config.yaml alongside the running forge binary (e.g. /home/ceroc/InSPIRE/bin/forge_bin/config.yaml).
+//  3. /home/ceroc/InSPIRE/bin/config.yaml (legacy location - previously sat
+//     next to the removed `server` binary).
 func LoadForgeConfig() (*ForgeConfig, error) {
-	// Look for config.yaml in same directory as server binary
-	configPath := filepath.Join(filepath.Dir(ServerBinary), "config.yaml")
+	var candidates []string
+	if env := os.Getenv("FORGE_CONFIG"); env != "" {
+		candidates = append(candidates, env)
+	}
+	if exe, err := os.Executable(); err == nil {
+		candidates = append(candidates, filepath.Join(filepath.Dir(exe), "config.yaml"))
+	}
+	candidates = append(candidates, "/home/ceroc/InSPIRE/bin/config.yaml")
 
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
+	var lastErr error
+	for _, p := range candidates {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		var cfg ForgeConfig
+		if err := yaml.Unmarshal(data, &cfg); err != nil {
+			return nil, fmt.Errorf("failed to parse config file %s: %w", p, err)
+		}
+		return &cfg, nil
 	}
 
-	var cfg ForgeConfig
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	if lastErr == nil {
+		lastErr = fmt.Errorf("no config.yaml found in any known location")
 	}
-
-	return &cfg, nil
+	return nil, fmt.Errorf("failed to read config file: %w", lastErr)
 }
 
 // ParseListenAddress parses a listen address like "10.8.11.202:8080" into IP and port

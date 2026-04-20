@@ -162,7 +162,17 @@ func (s *Server) findInstanceByMAC(mac string) *config.LXDInstance {
 	return nil
 }
 
-// parseAllNetworkConfigs parses all ethernet configs from cloud-init.network-config
+// parseAllNetworkConfigs parses all ethernet configs from cloud-init.network-config.
+//
+// The returned map is keyed by the interface's MAC address (lowercase, colon-separated)
+// when an lxd volatile.<iface>.hwaddr value is available for that netplan key
+// (e.g. netplan `eth0` -> `volatile.eth0.hwaddr`). This lets multi-NIC clients
+// (notably Windows, where netplan iface names like `eth0` don't exist) correlate
+// each returned config to a local adapter by its hardware address.
+//
+// If no matching volatile MAC is found for a given netplan iface, the entry is
+// keyed by the netplan iface name as a fallback so single-NIC Linux/OpenWrt
+// clients keep working unchanged.
 func (s *Server) parseAllNetworkConfigs(instance *config.LXDInstance) map[string]config.NetworkConfig {
 	networks := make(map[string]config.NetworkConfig)
 	cloudInitConfig := instance.Config["cloud-init.network-config"]
@@ -214,7 +224,12 @@ func (s *Server) parseAllNetworkConfigs(instance *config.LXDInstance) map[string
 		// Get DNS servers
 		netConfig.DNS = eth.Nameservers.Addresses
 
-		networks[ifaceName] = netConfig
+		// Prefer keying by MAC (for multi-NIC clients); fall back to iface name.
+		key := ifaceName
+		if mac := instance.Config["volatile."+ifaceName+".hwaddr"]; mac != "" {
+			key = strings.ToLower(mac)
+		}
+		networks[key] = netConfig
 	}
 
 	return networks

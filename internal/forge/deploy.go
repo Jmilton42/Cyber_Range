@@ -11,7 +11,6 @@ import (
 
 // DeployConfig holds deployment configuration
 type DeployConfig struct {
-	ServerBinary   string
 	ServerPort     string
 	ServerIP       string
 	InstancesFile  string
@@ -23,7 +22,6 @@ type DeployConfig struct {
 func DefaultDeployConfig() DeployConfig {
 	// Start with hardcoded defaults
 	config := DeployConfig{
-		ServerBinary:   ServerBinary,
 		ServerPort:     "8080",
 		ServerIP:       "10.0.14.6",
 		InstancesFile:  "instances.json",
@@ -95,21 +93,24 @@ func ExportInstances(workDir, projectName, instancesFile string) error {
 	return nil
 }
 
-// StartServer starts the config server
+// StartServer starts the config server as a detached "forge serve" child
+// process, so the HTTP server outlives the current `forge apply` invocation.
+// The server is the same binary as forge - just a different subcommand - so
+// there is no separate `server` binary to deploy.
 func StartServer(workDir string, config DeployConfig) error {
 	// Kill any existing server
 	StopServer()
 
-	// Check if server binary exists
-	if _, err := os.Stat(config.ServerBinary); os.IsNotExist(err) {
-		return fmt.Errorf("server binary not found at %s", config.ServerBinary)
+	// Re-exec the current forge binary as `forge serve ...`.
+	forgePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to resolve forge binary path: %w", err)
 	}
 
 	instancesPath := filepath.Join(workDir, config.InstancesFile)
 	listenAddr := fmt.Sprintf("%s:%s", config.ServerIP, config.ServerPort)
 
-	// Start server in background
-	cmd := exec.Command(config.ServerBinary,
+	cmd := exec.Command(forgePath, "serve",
 		"-listen", listenAddr,
 		"-instances", instancesPath,
 		"-idle-timeout", config.IdleTimeout,
@@ -144,10 +145,11 @@ func StartServer(workDir string, config DeployConfig) error {
 	return nil
 }
 
-// StopServer stops the config server
+// StopServer stops any running `forge serve` child processes. Matches on the
+// full command line so we don't accidentally kill the parent `forge apply` /
+// `forge destroy` invocation itself.
 func StopServer() {
-	// Use pkill to find and kill server processes
-	cmd := exec.Command("bash", "-c", "pgrep -x server | xargs -r kill 2>/dev/null || true")
+	cmd := exec.Command("bash", "-c", "pgrep -f 'forge serve' | xargs -r kill 2>/dev/null || true")
 	cmd.Run() // Ignore errors - server might not be running
 }
 

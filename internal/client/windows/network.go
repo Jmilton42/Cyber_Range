@@ -9,17 +9,25 @@ import (
 	"cyber-range-config/internal/config"
 )
 
-// ConfigureNetwork applies network configuration using netsh
+// ConfigureNetwork applies network configuration to the first "ethernet" adapter
+// it finds. Kept for backwards compatibility with single-NIC callers. Multi-NIC
+// callers should use ConfigureAdapter directly, once per local adapter, to avoid
+// the ambiguity of guessing which Windows adapter to target.
 func ConfigureNetwork(cfg config.NetworkConfig) error {
 	adapterName, err := getPrimaryAdapterName()
 	if err != nil {
 		return fmt.Errorf("failed to find network adapter: %w", err)
 	}
 
+	return ConfigureAdapter(adapterName, cfg)
+}
+
+// ConfigureAdapter applies network configuration to a specific Windows adapter
+// identified by its friendly name (as returned by net.Interfaces() / netsh).
+func ConfigureAdapter(adapterName string, cfg config.NetworkConfig) error {
 	if cfg.DHCP {
 		return configureDHCP(adapterName)
 	}
-
 	return configureStatic(adapterName, cfg)
 }
 
