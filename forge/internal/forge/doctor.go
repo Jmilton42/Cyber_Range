@@ -115,6 +115,32 @@ func RunDoctor() DoctorReport {
 		add("lxc cluster", CheckWarn, fmt.Sprintf("lxc cluster list failed: %v", err))
 	}
 
+	if tpls, err := LoadTemplates(); err == nil {
+		dir := templatesDir()
+		switch {
+		case dir == "" && len(tpls) <= 1:
+			add("templates", CheckWarn, fmt.Sprintf("no templates dir found - create %s and drop template directories in it", DefaultTemplatesDir))
+		case dir == "":
+			add("templates", CheckOK, fmt.Sprintf("%d template(s) (synthetic only - no templates dir on disk)", len(tpls)))
+		default:
+			add("templates", CheckOK, fmt.Sprintf("%d template(s) discovered in %s", len(tpls), dir))
+		}
+	} else {
+		add("templates", CheckWarn, fmt.Sprintf("templates dir unreadable: %v", err))
+	}
+
+	missingPlugins := []string{}
+	for _, name := range ExpectedPlugins() {
+		if _, ok := FindPlugin(name); !ok {
+			missingPlugins = append(missingPlugins, "forge-"+name)
+		}
+	}
+	if len(missingPlugins) == 0 {
+		add("plugins", CheckOK, fmt.Sprintf("all bundled plugins reachable on $PATH (%v)", ExpectedPlugins()))
+	} else {
+		add("plugins", CheckWarn, fmt.Sprintf("missing on $PATH: %v - run forge/scripts/build_all.sh", missingPlugins))
+	}
+
 	listenAddr := cfg.ServerIP + ":" + cfg.ServerPort
 	statusURL := fmt.Sprintf("http://%s/status", listenAddr)
 	client := http.Client{Timeout: 2 * time.Second}

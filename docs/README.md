@@ -48,7 +48,9 @@ drive OpenTofu against the range.
 
 | Page | Contents |
 |------|----------|
-| [Forge CLI Reference](./forge.md) | Command reference, subnet allocation model, `subnets.json`, troubleshooting. |
+| [Forge CLI Overview](./forge.md) | Install, command index, subnet model, troubleshooting. |
+| [Per-command docs](./forge/) | One page per command (`init`, `new`, `plan`, `apply`, `destroy`, `usage`, `migrate`, ...). |
+| [Writing Forge Plugins](./forge/writing-plugins.md) | How to author your own `forge-*` extensions. |
 | [Setup Guide](./setup.md) | End-to-end setup: server, Windows/Linux/OpenWrt clients, Terraform config, scheduled tasks. |
 | [Architecture / Plan](./plan.md) | Original architecture diagram and component breakdown for the configuration agent. |
 

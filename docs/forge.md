@@ -1,251 +1,139 @@
 # Forge CLI
 
-Forge is a wrapper around OpenTofu that automatically manages guac subnet allocations for Cyber Range projects.
+Forge is a wrapper around OpenTofu that automatically manages guac subnet
+allocations for Cyber Range projects, runs the HTTP config server,
+scaffolds new projects from templates, and provides a kubectl-style
+plugin system for day-2 LXD operations.
 
-## Features
+This page is the entry point. Each command has its own dedicated page in
+[`docs/forge/`](./forge/) — see the index below.
 
-- **Automatic subnet allocation** - Each project gets a unique `/24` subnet (10.0.1.0/16, 10.0.2.0/16, etc.)
-- **Transparent tofu wrapper** - All tofu flags work with forge (`-auto-approve`, `-parallelism`, etc.)
-- **Project detection** - Automatically reads `project_name` from `main.tf`
-- **Central allocation tracking** - All projects share `/home/ceroc/InSPIRE/bin/guac_subnet/subnets.json`
+---
 
-## Installation
+## Install
 
-### Build from source
-
-```bash
-cd /path/to/Cyber_Range
-go build -o ./bin/forge ./cmd/forge
-```
-
-### Install to system path
+Build everything (core binary + the six bundled plugins) in one shot:
 
 ```bash
-# Build forge (a single binary that also runs the HTTP config server
-# via `forge serve`, invoked automatically by `forge apply`)
-go build -o ./bin/forge ./cmd/forge
-
-# Move binary to InSPIRE bin
-mv ./bin/forge /home/ceroc/InSPIRE/bin/forge_bin/
-
-# Or install to system path
-sudo mv ./bin/forge /usr/local/bin/
+cd /path/to/Cyber_Range/forge
+./scripts/build_all.sh
+# binaries land in ./bin/: forge, forge-snapshot, forge-start,
+# forge-stop, forge-migrate, forge-networks-prune,
+# forge-cost
 ```
 
-## Setup
-
-1. **Build the binary:**
-   ```bash
-   go build -o ./bin/forge ./cmd/forge
-   ```
-
-2. **Initialize in your first project:**
-   ```bash
-   cd /home/ceroc/InSPIRE/CIG/OCIG/Win-lin
-   forge init
-   ```
-   This creates:
-   - `/home/ceroc/InSPIRE/bin/guac_subnet/subnets.json` (if it doesn't exist)
-   - Runs `tofu init`
-
-3. **Ensure your `main.tf` has a `project_name` variable:**
-   ```hcl
-   variable "project_name" {
-     type    = string
-     default = "my-project-name"
-   }
-   
-   variable "guac_subnet_octet" {
-     type        = number
-     default     = 1
-     description = "Third octet for guac subnet"
-   }
-   ```
-
-## Usage
-
-### Basic Commands
+Install onto the OpenTofu host:
 
 ```bash
-# Initialize (creates subnets.json + tofu init)
-forge init
-
-# Plan infrastructure
-forge plan
-
-# Apply infrastructure (allocates subnet automatically)
-forge apply
-
-# Apply without confirmation
-forge apply -auto-approve
-
-# Destroy infrastructure (releases subnet)
-forge destroy
-
-# Check current status
-forge status
+INSTALL=1 ./scripts/build_all.sh
+# copies into /home/ceroc/InSPIRE/bin/forge_bin/
 ```
 
-### Example (from this repo)
-
-This repository includes an example OpenTofu configuration at `infra/tofu/main.tf`. You can run Forge against it like this:
+Or system-wide:
 
 ```bash
-./bin/forge -chdir=infra/tofu init
-./bin/forge -chdir=infra/tofu plan
+sudo install -m 0755 ./bin/forge ./bin/forge-* /usr/local/bin/
 ```
 
-### Help
+Every `forge-*` plugin must be on `$PATH` for `forge snapshot`,
+`forge start`, `forge stop`, `forge migrate`, and `forge networks prune`
+to work. `forge doctor` warns if any are missing.
 
-```bash
-# Main help
-forge -help
-forge help
+---
 
-# Command-specific help (passes through to tofu)
-forge apply -help
-forge plan -help
-forge destroy -help
-```
+## Command index
 
-### Global Options
+### Infrastructure — author and lifecycle a project
 
-```bash
-# Change directory before executing
-forge -chdir=/path/to/project apply
+| Command | Purpose |
+|---------|---------|
+| [`forge init`](./forge/init.md) | Create `subnets.json` (if missing) and run `tofu init` |
+| [`forge new`](./forge/new.md) | Scaffold a new project from a template in `/home/ceroc/InSPIRE/templates/` |
+| [`forge validate`](./forge/validate.md) | Run `tofu validate` (passthrough) |
+| [`forge plan`](./forge/plan.md) | Preview the changes `apply` would make |
+| [`forge apply`](./forge/apply.md) | Full deployment: tofu apply + start config server + start Windows VMs |
+| [`forge destroy`](./forge/destroy.md) | Full teardown: stop server + tofu destroy + release the subnet |
 
-# Show version
-forge -version
-```
+### Diagnostics — find out what's going on
 
-## How It Works
+| Command | Purpose |
+|---------|---------|
+| [`forge status`](./forge/status.md) | This project's subnet, or a cluster-wide allocation table |
+| [`forge doctor`](./forge/doctor.md) | Preflight checks (tofu/lxc/jq, subnets.json, plugins, server) |
+| [`forge config`](./forge/config.md) | Print the resolved deploy config and which `config.yaml` was loaded |
 
-### Full Deployment (`forge apply`)
+### Server — control the HTTP configuration server
 
-When you run `forge apply`:
+| Command | Purpose |
+|---------|---------|
+| [`forge serve`](./forge/serve.md) | Run the HTTP config server (auto-discovers `instances.json`) |
+| [`forge logs`](./forge/logs.md) | Show or `-f` tail `server.log` in the current project |
+| [`forge reload`](./forge/reload.md) | POST `/reload` so the running server re-reads `instances.json` |
 
-1. Reads `project_name` from `main.tf` in the current directory
-2. Allocates next available subnet octet (1, 2, 3, ..., 254)
-3. Saves allocation to `subnets.json`
-4. Runs `tofu apply -var project_name=X -var guac_subnet_octet=Y`
-5. Waits for VMs to initialize (10 seconds)
-6. Exports LXD instances to `instances.json`
-7. Starts the config server
-8. Starts Windows VMs (via `/home/ceroc/InSPIRE/bin/scripts/start_win.sh`)
+### Subnets — manage allocations
 
-### Full Teardown (`forge destroy`)
+| Command | Purpose |
+|---------|---------|
+| [`forge subnets`](./forge/subnets.md) | `list` / `free` / `reserve` allocations in `subnets.json` |
+| [`forge import`](./forge/import.md) | Register an existing LXD project (created outside forge) |
 
-When you run `forge destroy`:
+### Plugins — day-2 LXD operations
 
-1. Stops the config server
-2. Runs `tofu destroy -var project_name=X -var guac_subnet_octet=Y`
-3. Removes allocation from `subnets.json`
-4. The octet becomes available for future projects
+| Command | Purpose |
+|---------|---------|
+| [`forge plugins`](./forge/plugins.md) | List discovered `forge-*` binaries |
+| [`forge snapshot`](./forge/snapshot.md) | Snapshot every instance in a project |
+| [`forge start`](./forge/start.md) | Start every instance in a project |
+| [`forge stop`](./forge/stop.md) | Force-stop every instance in a project |
+| [`forge migrate`](./forge/migrate.md) | Move instances between cluster members |
+| [`forge networks prune`](./forge/networks-prune.md) | Delete orphan OVN networks by name prefix |
+| [`forge cost`](./forge/cost.md) | Per-instance vCPU / RAM / disk breakdown for one project |
 
-### Example `subnets.json`
+### Meta
 
-```json
-{
-  "allocations": [
-    {
-      "project": "ocig-win-lin",
-      "subnet_octet": 1,
-      "allocated_at": "2026-01-12T10:30:00-05:00"
-    },
-    {
-      "project": "csc-3410-lab",
-      "subnet_octet": 2,
-      "allocated_at": "2026-01-12T11:00:00-05:00"
-    },
-    {
-      "project": "security-workshop",
-      "subnet_octet": 3,
-      "allocated_at": "2026-01-13T09:15:00-05:00"
-    }
-  ]
-}
-```
+| Command | Purpose |
+|---------|---------|
+| [`forge version`](./forge/version.md) | Show the current Forge version |
+| `forge help` / `forge -help` | Print the in-CLI help summary |
 
-## Subnet Scheme
+### Authoring plugins
 
-Each project gets a `/24` subnet within the `10.0.0.0/16` network:
+If you want to extend forge with your own commands (Discord notifier,
+grade exporter, custom integrations), see
+[Writing Forge Plugins](./forge/writing-plugins.md).
 
-| Octet | Subnet       | Gateway    | Guac VM IPs |
-|-------|--------------|------------|-------------|
-| 1     | 10.0.1.0/24  | 10.0.1.1   | 10.0.1.2+   |
-| 2     | 10.0.2.0/24  | 10.0.2.1   | 10.0.2.2+   |
-| 3     | 10.0.3.0/24  | 10.0.3.1   | 10.0.3.2+   |
-| ...   | ...          | ...        | ...         |
-| 254   | 10.0.254.0/24| 10.0.254.1 | 10.0.254.2+ |
-
-## Commands Reference
-
-### Infrastructure
-
-| Command | Description |
-|---------|-------------|
-| `forge init` | Create subnets.json (if missing) and run `tofu init` |
-| `forge validate` | Run `tofu validate` (passthrough) |
-| `forge plan` | Allocate subnet and run `tofu plan -var ...` |
-| `forge apply` | Full deployment: tofu apply + export instances + start server + start Windows |
-| `forge destroy` | Full teardown: stop server + tofu destroy + release subnet |
-
-### Diagnostics
-
-| Command | Description |
-|---------|-------------|
-| `forge status` | In a project: show that project's subnet. Outside a project: cluster-wide allocation table. Supports `-json`. |
-| `forge doctor` | Preflight checks: tofu / lxc / jq on `$PATH`, `subnets.json` valid JSON, `config.yaml` loadable, `start_win.sh` and lxd_scripts present, `lxc cluster list` parseable, config server `/status` reachable. Exits non-zero on any FAIL. Supports `-json`. |
-| `forge config` | Print resolved deploy config (server IP, port, idle timeout, scripts dir, subnets file) plus the `config.yaml` path actually loaded — or `(none)` if running on built-in defaults. Supports `-json`. |
-
-### Server control
-
-| Command | Description |
-|---------|-------------|
-| `forge serve` | Restart the HTTP config server. Auto-detects `./instances.json` and the same listen address `forge apply` uses. New: `--log-format=json` emits one-line JSON log records. |
-| `forge logs [-f]` | Show or tail `server.log` in the current project directory. `-f` polls every 500ms. |
-| `forge reload` | POST `/reload` to the running config server so it re-reads `instances.json` without restarting. |
-
-### Subnets
-
-| Command | Description |
-|---------|-------------|
-| `forge subnets list` | Print every allocation in `subnets.json`. Supports `-json`. |
-| `forge subnets free <project>` | Release a project's subnet. Confirms before writing; `-yes` to skip. |
-| `forge subnets reserve <project> <octet>` | Hand-allocate a specific octet. Confirms before writing; `-yes` to skip. |
-| `forge import <project>` | Register an existing LXD project (created outside forge) by inferring its octet from the OVN network's `ipv4.address`. Confirms before writing. |
-
-### LXD operations (script wrappers)
-
-These delegate to the bash scripts in `/home/ceroc/InSPIRE/bin/scripts/`. The
-forge wrapper adds a per-instance preview and confirmation prompt where
-appropriate.
-
-| Command | Description |
-|---------|-------------|
-| `forge snapshot <project>` | Wraps `snapshot.sh`. Timestamped snapshot of every instance. |
-| `forge start <project>` | Wraps `start_vms.sh`. Starts every instance. |
-| `forge stop <project>` | Wraps `stop_vms.sh`. Force-stops every instance. |
-| `forge migrate <project> <target> [--source <node>]` | Wraps `move_vms.sh` (whole project) or `move_vms_nodes.sh` (drain a single source node). Prints affected instances and prompts before running. |
-| `forge networks prune <prefix> [--project P] [--dry-run]` | Wraps `remove_networks.sh`. Deletes orphan OVN networks by name prefix. The script asks you to re-type the prefix to confirm; `-yes` skips that. |
-
-### Other
-
-| Command | Description |
-|---------|-------------|
-| `forge version` | Show version |
-| `forge help` | Show help |
+---
 
 ## Global options
+
+These flags work with any subcommand and are stripped before dispatch.
 
 | Flag | Effect |
 |------|--------|
 | `-chdir=DIR` | Change to `DIR` before executing |
-| `-json` | Emit JSON output for `status`, `subnets list`, `config`, `doctor` |
-| `-yes` / `-y` | Skip interactive confirmation prompts (subnets free / reserve, import, migrate). The networks-prune confirmation is enforced inside `remove_networks.sh` and is also bypassed by this flag. |
-| `-completion=bash\|zsh` | Print a shell completion script to stdout and exit |
-| `-help` | Show help |
-| `-version` | Show version |
+| `-help` / `--help` / `-h` | Show top-level or per-command help |
+| `-version` / `--version` / `-v` | Show version |
+| `-json` / `--json` | Emit JSON output (status, subnets list, config, doctor, plugins; forwarded to plugins via `FORGE_JSON`) |
+| `-yes` / `--yes` / `-y` | Skip interactive confirmation prompts |
+| `-completion=SH` | Print bash or zsh completion script and exit |
+
+---
+
+## Subnet scheme
+
+Every forge project gets a unique `/24` inside `10.0.0.0/16`:
+
+| Octet | Subnet | Gateway | Guac VM IPs |
+|-------|--------|---------|-------------|
+| 1 | 10.0.1.0/24 | 10.0.1.1 | 10.0.1.2+ |
+| 2 | 10.0.2.0/24 | 10.0.2.1 | 10.0.2.2+ |
+| ... | ... | ... | ... |
+| 254 | 10.0.254.0/24 | 10.0.254.1 | 10.0.254.2+ |
+
+Allocations are recorded in `/home/ceroc/InSPIRE/bin/guac_subnet/subnets.json`.
+See [`forge subnets`](./forge/subnets.md) for management commands.
+
+---
 
 ## Shell completion
 
@@ -260,29 +148,39 @@ forge -completion=zsh > ~/.zsh/completions/_forge
 fpath=(~/.zsh/completions $fpath); autoload -Uz compinit && compinit
 ```
 
-The completion covers top-level commands and the `subnets` / `networks`
-sub-trees. It does not currently autocomplete project names — those still
-have to be typed.
+The completion is dynamic: `forge destroy <TAB>` lists current
+allocations, `forge migrate <project> <TAB>` lists cluster nodes,
+`forge new --template=<TAB>` lists templates, and any `forge-*` plugin
+on `$PATH` is auto-discovered. See
+[Writing Forge Plugins](./forge/writing-plugins.md#how-completion-works)
+for how to make your own plugin tab-completable.
+
+---
 
 ## Configuration
 
-The following defaults are used during deployment:
+Default deploy settings (overridable via `config.yaml`):
 
-| Setting | Default Value | Description |
-|---------|---------------|-------------|
+| Setting | Default | Description |
+|---------|---------|-------------|
 | Server IP | `10.0.14.6` | Config server listen address |
 | Server Port | `8080` | Config server port |
 | Idle Timeout | `5m` | Server auto-shutdown after inactivity |
-| Instances File | `instances.json` | LXD instance export file (created in project dir) |
+| Instances File | `instances.json` | LXD instance export (created in project dir) |
 | Start Win Script | `/home/ceroc/InSPIRE/bin/scripts/start_win.sh` | Windows VM start script |
+| Subnets File | `/home/ceroc/InSPIRE/bin/guac_subnet/subnets.json` | Cluster-wide subnet allocations |
+| Templates Dir | `/home/ceroc/InSPIRE/templates` | Where `forge new` discovers templates (every subdirectory with a `main.tf` becomes a template) |
 
-**Note:** The HTTP configuration server is part of the `forge` binary itself - `forge apply` launches it as a detached `forge serve` child process. There is no separate `server` binary. The Windows start script is expected to be at `/home/ceroc/InSPIRE/bin/scripts/start_win.sh`. Only the `instances.json` file is created in the project directory.
+Run [`forge config`](./forge/config.md) to see what's actually in effect
+on your machine, including which `config.yaml` was loaded.
+
+---
 
 ## Troubleshooting
 
 ### "could not find project_name variable"
+Add a `project_name` variable to your `main.tf`:
 
-Make sure your `main.tf` has:
 ```hcl
 variable "project_name" {
   type    = string
@@ -291,16 +189,26 @@ variable "project_name" {
 ```
 
 ### "no subnet allocation found"
-
-Run `forge apply` first to allocate a subnet before running `forge destroy`.
+Run [`forge apply`](./forge/apply.md) first to allocate a subnet before
+running [`forge destroy`](./forge/destroy.md).
 
 ### "no available subnet octets"
-
-All 254 subnets are allocated. Run `forge destroy` on unused projects to free up octets.
+All 254 subnets are allocated. Run `forge destroy` on unused projects, or
+use [`forge subnets free <project>`](./forge/subnets.md) to release one
+manually.
 
 ### Permission denied on subnets.json
 
-Ensure the directory exists and you have write permissions:
 ```bash
 mkdir -p /home/ceroc/InSPIRE/bin/guac_subnet
+sudo chown $USER /home/ceroc/InSPIRE/bin/guac_subnet
+```
+
+### "'snapshot' is now a plugin"
+The day-2 LXD commands (snapshot/start/stop/migrate/networks prune)
+ship as separate `forge-*` binaries since v1.2. Build and install them:
+
+```bash
+cd /path/to/Cyber_Range/forge
+INSTALL=1 ./scripts/build_all.sh
 ```

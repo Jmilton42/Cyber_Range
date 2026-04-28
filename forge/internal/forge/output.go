@@ -4,7 +4,33 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 )
+
+// RenderBar draws a fixed-width usage bar like "[██████░░░░░░]" given a
+// numerator and denominator. Returns just the bar string; callers compose
+// it with surrounding labels. width is the number of cells; we always
+// produce exactly width characters between the brackets.
+func RenderBar(used, total int64, width int) string {
+	if width <= 0 {
+		width = 12
+	}
+	if total <= 0 {
+		return "[" + strings.Repeat(" ", width) + "]"
+	}
+	pct := float64(used) / float64(total)
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 1 {
+		pct = 1
+	}
+	filled := int(pct*float64(width) + 0.5)
+	if filled > width {
+		filled = width
+	}
+	return "[" + strings.Repeat("█", filled) + strings.Repeat("░", width-filled) + "]"
+}
 
 // PrintJSON marshals v with two-space indentation and writes it to stdout
 // followed by a newline. It is the single entry point used by every command

@@ -6,12 +6,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"cyber-range-config/internal/forge"
 )
 
-const version = "1.1.0"
+const version = "2.0.0"
 
 // globalFlags holds CLI-wide flags that any subcommand may read. They are
 // parsed by parseGlobals before subcommand dispatch so individual commands
@@ -43,9 +44,39 @@ func main() {
 		return
 	}
 
-	if gf.showHelp || command == "" || command == "help" {
+	if gf.showHelp || command == "" {
 		printHelp()
 		return
+	}
+
+	// `forge help [<topic>]` prints the global summary or a per-command
+	// man-page entry (`forge help destroy`).
+	if command == "help" {
+		if len(commandArgs) > 0 {
+			topic := normalizeHelpTopic(commandArgs)
+			if forge.PrintSubCommandHelpTo(topic) {
+				return
+			}
+			printError(fmt.Sprintf("no help topic for %q (try `forge help`)", topic))
+			os.Exit(1)
+		}
+		printHelp()
+		return
+	}
+
+	// `forge <cmd> -help` prints the man-page entry for that command.
+	// We intercept here so every command gets consistent help without
+	// each runXxx having to re-implement the check.
+	if forge.ArgsHaveHelp(commandArgs) {
+		topic := command
+		if command == "networks" && len(commandArgs) > 0 && commandArgs[0] == "prune" {
+			topic = "networks-prune"
+		}
+		if forge.PrintSubCommandHelpTo(topic) {
+			return
+		}
+		// Fall through: command may still be a plugin which can render
+		// its own help page.
 	}
 
 	workDir, err := forge.GetWorkingDir(gf.chdir)
@@ -82,23 +113,17 @@ func main() {
 		exitCode = runSubnets(commandArgs, gf)
 	case "import":
 		exitCode = runImport(commandArgs, gf.autoYes)
-	case "snapshot":
-		exitCode = runScriptCmd("snapshot", commandArgs, forge.RunSnapshot)
-	case "start":
-		exitCode = runScriptCmd("start", commandArgs, forge.RunStart)
-	case "stop":
-		exitCode = runScriptCmd("stop", commandArgs, forge.RunStop)
-	case "migrate":
-		exitCode = runMigrate(commandArgs, gf.autoYes)
-	case "networks":
-		exitCode = runNetworks(commandArgs, gf.autoYes)
+	case "plugins":
+		exitCode = runPlugins(commandArgs, gf.jsonOut)
+	case "new":
+		exitCode = runNew(commandArgs, gf.autoYes)
 	case "version":
 		fmt.Printf("Forge v%s\n", version)
 		exitCode = 0
+	case "__complete":
+		exitCode = forge.RunComplete(commandArgs)
 	default:
-		printError(fmt.Sprintf("Unknown command: %s", command))
-		printHelp()
-		exitCode = 1
+		exitCode = dispatchPluginOrUnknown(workDir, command, commandArgs, gf)
 	}
 
 	os.Exit(exitCode)
@@ -121,9 +146,20 @@ func parseGlobals(args []string) (globalFlags, string, []string) {
 		case strings.HasPrefix(arg, "-chdir="):
 			gf.chdir = strings.TrimPrefix(arg, "-chdir=")
 		case arg == "-help", arg == "--help", arg == "-h":
-			gf.showHelp = true
+			// Once we've identified the subcommand, -help belongs to
+			// it (e.g. `forge cost -help` should show the cost
+			// man-page, not the global one).
+			if command == "" {
+				gf.showHelp = true
+			} else {
+				rest = append(rest, arg)
+			}
 		case arg == "-version", arg == "--version", arg == "-v":
-			gf.showVersion = true
+			if command == "" {
+				gf.showVersion = true
+			} else {
+				rest = append(rest, arg)
+			}
 		case arg == "-json", arg == "--json":
 			gf.jsonOut = true
 		case arg == "-yes", arg == "--yes", arg == "-y":
@@ -150,6 +186,7 @@ allocations for Cyber Range projects, plus day-2 LXD operations.
 
 Infrastructure:
   init              Prepare your working directory for other commands
+  new               Scaffold a new project from a template directory
   validate          Check whether the configuration is valid
   plan              Show changes required by the current configuration
   apply             Create or update infrastructure (full deployment)
@@ -171,18 +208,22 @@ Subnets:
   subnets reserve <p> <octet>    Pre-allocate a specific octet (confirm by default)
   import <project>               Register an existing LXD project in subnets.json
 
-LXD operations:
-  snapshot <project>             Snapshot every instance (snapshot.sh)
-  start <project>                Start every instance (start_vms.sh)
-  stop <project>                 Stop every instance (stop_vms.sh)
-  migrate <project> <target>     Move every instance to <target> node
-                                 (--source <node> drains only that node)
-  networks prune <prefix>        Delete OVN networks by name prefix
-                                 (--project P, --dry-run, supports --yes)
+Plugins:
+  plugins list                   List discovered forge-* binaries on $PATH
+  <name> ...                     Any unknown command resolves to forge-<name>
+                                 if it's on $PATH (kubectl-style plugins).
+                                 Bundled: forge-snapshot, forge-start,
+                                          forge-stop, forge-migrate,
+                                          forge-networks-prune,
+                                          forge-cost
+  cost [<project>]               Per-project vCPU / RAM / disk
+                                 breakdown (forge-cost plugin)
 
 Other:
   version           Show the current Forge version
   help              Show this help output
+  help <topic>      Show the man-page entry for one command
+                    (also: forge <topic> -help)
 
 Global options:
   -chdir=DIR        Switch to a different working directory before executing
@@ -206,10 +247,34 @@ Examples:
   forge networks prune teamA- --dry-run  Show what would be deleted
 `
 	fmt.Print(help)
+	if plugins, err := forge.ListPlugins(); err == nil && len(plugins) > 0 {
+		fmt.Println("\nInstalled plugins:")
+		for _, p := range plugins {
+			fmt.Printf("  %-22s %s\n", p.Name, p.Path)
+		}
+	}
 }
 
 func printError(msg string) {
 	fmt.Fprintf(os.Stderr, "\033[31m[ERROR]\033[0m %s\n", msg)
+}
+
+// normalizeHelpTopic turns the args after `forge help` into a single
+// canonical topic name. Joins multi-word topics like `networks prune`
+// into `networks-prune` so they match the help table key.
+func normalizeHelpTopic(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+	if len(args) == 1 {
+		return args[0]
+	}
+	// Multi-word topics live in subCommandHelp under hyphenated keys.
+	// Today only `networks prune` qualifies.
+	if args[0] == "networks" && args[1] == "prune" {
+		return "networks-prune"
+	}
+	return args[0]
 }
 
 func printInfo(msg string) {
@@ -616,74 +681,202 @@ func runImport(args []string, autoYes bool) int {
 	return 0
 }
 
-// runScriptCmd is shared by snapshot/start/stop because they're identical
-// shells: validate one positional arg, dispatch to the named function.
-func runScriptCmd(name string, args []string, fn func(string) error) int {
-	if len(args) < 1 {
-		printError(fmt.Sprintf("usage: forge %s <project>", name))
+// dispatchPluginOrUnknown handles the `default` arm of the command
+// switch. It looks for a plugin matching the typed command (with one
+// level of two-word lookahead so `forge networks prune` resolves to
+// forge-networks-prune), prints a helpful error if a known-moved built-in
+// is missing, and falls back to the standard unknown-command help.
+func dispatchPluginOrUnknown(workDir, command string, args []string, gf globalFlags) int {
+	pluginEnv := newPluginEnv(workDir, gf)
+
+	if len(args) >= 1 {
+		twoWord := command + "-" + args[0]
+		if path, ok := forge.FindPlugin(twoWord); ok {
+			code, err := forge.RunPlugin(path, args[1:], pluginEnv)
+			if err != nil {
+				printError(err.Error())
+			}
+			return code
+		}
+	}
+	if path, ok := forge.FindPlugin(command); ok {
+		code, err := forge.RunPlugin(path, args, pluginEnv)
+		if err != nil {
+			printError(err.Error())
+		}
+		return code
+	}
+
+	if msg, ok := legacyMovedNotice(command, args); ok {
+		printError(msg)
 		return 1
 	}
-	if err := fn(args[0]); err != nil {
-		printError(err.Error())
-		return 1
-	}
-	return 0
+
+	printError(fmt.Sprintf("Unknown command: %s", command))
+	printHelp()
+	return 1
 }
 
-func runMigrate(args []string, autoYes bool) int {
-	fs := flag.NewFlagSet("migrate", flag.ContinueOnError)
-	source := fs.String("source", "", "Only migrate instances currently on this node (drain mode)")
-	if err := fs.Parse(args); err != nil {
-		return 1
+// newPluginEnv assembles the env passed into every plugin invocation.
+// FORGE_PROJECT is filled in opportunistically: a missing main.tf is not
+// an error here because plenty of plugins won't care about it.
+func newPluginEnv(workDir string, gf globalFlags) forge.PluginEnv {
+	env := forge.PluginEnv{
+		WorkDir:     workDir,
+		SubnetsFile: forge.SubnetsFile,
+		AutoYes:     gf.autoYes,
+		JSON:        gf.jsonOut,
+		Version:     version,
 	}
-	pos := fs.Args()
-	if len(pos) < 2 {
-		printError("usage: forge migrate <project> <target-node> [--source <node>]")
-		return 1
+	if name, err := forge.ParseProjectName(workDir); err == nil {
+		env.Project = name
 	}
-	if err := forge.RunMigrate(pos[0], pos[1], *source, autoYes); err != nil {
-		printError(err.Error())
-		return 1
+	if path := os.Getenv("FORGE_CONFIG"); path != "" {
+		env.ConfigPath = path
 	}
-	return 0
+	return env
 }
 
-// runNetworks dispatches the networks sub-tree (currently just `prune`).
-func runNetworks(args []string, autoYes bool) int {
-	if len(args) == 0 {
-		printError("networks requires a subcommand: prune")
-		return 1
+// legacyMovedNotice returns a friendly message when the user types one of
+// the now-pluginized command names but the corresponding forge-* binary
+// isn't installed yet. Returns ("", false) otherwise.
+func legacyMovedNotice(command string, args []string) (string, bool) {
+	movedSingles := map[string]string{
+		"snapshot": "forge-snapshot",
+		"start":    "forge-start",
+		"stop":     "forge-stop",
+		"migrate":  "forge-migrate",
+		"cost":     "forge-cost",
 	}
-	sub := args[0]
-	rest := args[1:]
-	switch sub {
-	case "prune":
-		fs := flag.NewFlagSet("networks prune", flag.ContinueOnError)
-		project := fs.String("project", "", "LXD project to operate in (defaults to current)")
-		dryRun := fs.Bool("dry-run", false, "Show what would be deleted without deleting anything")
-		if err := fs.Parse(rest); err != nil {
-			return 1
+	if bin, ok := movedSingles[command]; ok {
+		return fmt.Sprintf("'%s' is now a plugin. Install %s on $PATH (run `forge/scripts/build_all.sh` or copy from your forge_bin dir).", command, bin), true
+	}
+	if command == "networks" {
+		sub := ""
+		if len(args) > 0 {
+			sub = args[0]
 		}
-		pos := fs.Args()
-		if len(pos) < 1 {
-			printError("usage: forge networks prune <prefix> [--project P] [--dry-run]")
-			return 1
+		if sub == "prune" {
+			return "'networks prune' is now a plugin. Install forge-networks-prune on $PATH (run `forge/scripts/build_all.sh`).", true
 		}
-		if err := forge.RunNetworksPrune(forge.NetworksPruneOptions{
-			Prefix:  pos[0],
-			Project: *project,
-			DryRun:  *dryRun,
-			Yes:     autoYes,
-		}); err != nil {
+		return "'networks' moved to plugins. Currently the only subcommand is `prune` -> forge-networks-prune.", true
+	}
+	return "", false
+}
+
+// runPlugins implements `forge plugins list`. JSON output is supported so
+// other tools (CI, doctors) can enumerate what's installed.
+func runPlugins(args []string, jsonOut bool) int {
+	if len(args) == 0 || args[0] == "list" {
+		plugins, err := forge.ListPlugins()
+		if err != nil {
 			printError(err.Error())
 			return 1
 		}
+		if jsonOut {
+			if err := forge.PrintJSON(plugins); err != nil {
+				printError(err.Error())
+				return 1
+			}
+			return 0
+		}
+		if len(plugins) == 0 {
+			fmt.Println("No forge-* plugins found on $PATH.")
+			fmt.Println("Build the bundled ones with `forge/scripts/build_all.sh`.")
+			return 0
+		}
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "NAME\tPATH")
+		for _, p := range plugins {
+			fmt.Fprintf(w, "%s\t%s\n", p.Name, p.Path)
+		}
+		_ = w.Flush()
 		return 0
-	default:
-		printError(fmt.Sprintf("unknown networks subcommand: %s", sub))
+	}
+	printError(fmt.Sprintf("unknown plugins subcommand: %s", args[0]))
+	return 1
+}
+
+// runNew scaffolds a new project from a template. Flags are conservative:
+// when --template or --name are missing AND stdin is a TTY, an interactive
+// picker prompts for them; otherwise we error out so scripted use never
+// silently hangs waiting for input.
+func runNew(args []string, autoYes bool) int {
+	fs := flag.NewFlagSet("new", flag.ContinueOnError)
+	template := fs.String("template", "", "Template id (directory name under templates/, or `blank`)")
+	name := fs.String("name", "", "Project name (letters, digits, '-' or '_'; e.g. CSC-4100-Test)")
+	dir := fs.String("dir", "", "Target directory (default: ./<name>)")
+	reserve := fs.Bool("reserve", true, "Allocate a subnet octet up front")
+	noReserve := fs.Bool("no-reserve", false, "Skip subnet allocation")
+	if err := fs.Parse(args); err != nil {
 		return 1
 	}
+	if *noReserve {
+		*reserve = false
+	}
+
+	interactive := !autoYes && isTTY(os.Stdin)
+
+	if *template == "" {
+		if !interactive {
+			printError("--template is required (use `forge new` interactively to pick from a list)")
+			return 1
+		}
+		tpls, err := forge.LoadTemplates()
+		if err != nil {
+			printError(err.Error())
+			return 1
+		}
+		picked, err := forge.PromptForTemplate(tpls)
+		if err != nil {
+			printError(err.Error())
+			return 1
+		}
+		*template = picked
+	}
+
+	if *name == "" {
+		if !interactive {
+			printError("--name is required")
+			return 1
+		}
+		picked, err := forge.PromptForProjectName()
+		if err != nil {
+			printError(err.Error())
+			return 1
+		}
+		*name = picked
+	}
+
+	if err := forge.RunNew(forge.NewOptions{
+		Template:    *template,
+		Name:        *name,
+		TargetDir:   *dir,
+		Reserve:     *reserve,
+		AutoYes:     autoYes,
+		Interactive: interactive,
+	}); err != nil {
+		printError(err.Error())
+		return 1
+	}
+	return 0
 }
+
+// isTTY returns true when the file descriptor is attached to an
+// interactive terminal. Used to decide whether `forge new` (and any
+// future picker) can safely prompt for missing fields.
+func isTTY(f *os.File) bool {
+	fi, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	return (fi.Mode() & os.ModeCharDevice) != 0
+}
+
+// `forge cost` is no longer a built-in. It ships as the forge-cost
+// plugin; the rendering logic lives in
+// internal/forge/usagerender.go so each shim can drive it. Routing
+// happens via dispatchPluginOrUnknown.
 
 func runPassthrough(workDir string, command string, args []string) int {
 	if err := forge.RunTofuPassthrough(workDir, command, args); err != nil {
