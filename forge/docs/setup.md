@@ -68,9 +68,6 @@ New-Item -Path "C:\ProgramData\cyber-range" -ItemType Directory -Force
 
 # Create scheduled task (as Administrator)
 .\scripts\setup-task.ps1 -ServerURL "http://YOUR_SERVER_IP:8080"
-
-# Sys prep the machines after you edit them
-%WINDIR%\system32\sysprep\sysprep.exe /oobe /generalize /shutdown
 ```
 
 Then snapshot/export the image.

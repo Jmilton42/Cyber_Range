@@ -2,6 +2,7 @@ package forge
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -18,6 +19,32 @@ type ServeOptions struct {
 	Listen        string        // e.g. "10.0.14.6:8080"
 	InstancesFile string        // path to instances.json
 	IdleTimeout   time.Duration // 0 disables idle shutdown
+	LogFormat     string        // "text" (default) or "json"
+}
+
+// logEvent emits a single log line in either text or JSON form depending on
+// opts.LogFormat. Keeping this in one place lets the rest of serve.go stay
+// readable while still producing structured log output when asked.
+func logEvent(format, event, msg string, fields map[string]interface{}) {
+	if format == "json" {
+		entry := map[string]interface{}{
+			"ts":    time.Now().UTC().Format(time.RFC3339Nano),
+			"event": event,
+			"msg":   msg,
+		}
+		for k, v := range fields {
+			entry[k] = v
+		}
+		if data, err := json.Marshal(entry); err == nil {
+			fmt.Println(string(data))
+			return
+		}
+	}
+	if len(fields) == 0 {
+		log.Printf("%s", msg)
+		return
+	}
+	log.Printf("%s %v", msg, fields)
 }
 
 // RunServer starts the HTTP config server in the current process and blocks
@@ -30,6 +57,9 @@ func RunServer(opts ServeOptions) error {
 	}
 	if opts.Listen == "" {
 		opts.Listen = ":8080"
+	}
+	if opts.LogFormat == "" {
+		opts.LogFormat = "text"
 	}
 
 	srv, err := server.NewServer(opts.InstancesFile)
@@ -62,7 +92,8 @@ func RunServer(opts ServeOptions) error {
 			ticker := time.NewTicker(30 * time.Second)
 			defer ticker.Stop()
 
-			log.Printf("Idle timeout enabled: %v", opts.IdleTimeout)
+			logEvent(opts.LogFormat, "idle_timer_start", "Idle timeout enabled",
+				map[string]interface{}{"timeout": opts.IdleTimeout.String()})
 
 			for {
 				select {
@@ -71,13 +102,18 @@ func RunServer(opts ServeOptions) error {
 					idleTime := time.Since(lastActivity)
 
 					if idleTime >= opts.IdleTimeout {
-						log.Printf("Server idle for %v, initiating shutdown...", idleTime.Round(time.Second))
+						logEvent(opts.LogFormat, "idle_shutdown", "Server idle, initiating shutdown",
+							map[string]interface{}{"idle": idleTime.Round(time.Second).String()})
 						closeShutdown()
 						return
 					}
 
 					remaining := opts.IdleTimeout - idleTime
-					log.Printf("Idle for %v, shutdown in %v if no activity", idleTime.Round(time.Second), remaining.Round(time.Second))
+					logEvent(opts.LogFormat, "idle_tick", "Idle, shutdown pending if no activity",
+						map[string]interface{}{
+							"idle":      idleTime.Round(time.Second).String(),
+							"remaining": remaining.Round(time.Second).String(),
+						})
 
 				case <-shutdown:
 					return
@@ -92,7 +128,8 @@ func RunServer(opts ServeOptions) error {
 	go func() {
 		select {
 		case sig := <-sigChan:
-			log.Printf("Received signal %v, shutting down...", sig)
+			logEvent(opts.LogFormat, "signal", "Received signal, shutting down",
+				map[string]interface{}{"signal": sig.String()})
 			closeShutdown()
 		case <-shutdown:
 		}
@@ -100,12 +137,12 @@ func RunServer(opts ServeOptions) error {
 
 	serveErr := make(chan error, 1)
 	go func() {
-		log.Printf("Starting server on %s", opts.Listen)
-		log.Printf("Instances file: %s", opts.InstancesFile)
-		log.Printf("Endpoints: GET /config?mac=XX:XX:XX:XX:XX:XX, POST /reload, GET /status")
-		if opts.IdleTimeout > 0 {
-			log.Printf("Will shutdown after %v of inactivity", opts.IdleTimeout)
-		}
+		logEvent(opts.LogFormat, "server_start", "Starting server",
+			map[string]interface{}{
+				"listen":         opts.Listen,
+				"instances_file": opts.InstancesFile,
+				"idle_timeout":   opts.IdleTimeout.String(),
+			})
 
 		if err := httpServer.ListenAndServe(); err != http.ErrServerClosed {
 			serveErr <- err
@@ -120,9 +157,10 @@ func RunServer(opts ServeOptions) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	log.Println("Shutting down server...")
+	logEvent(opts.LogFormat, "server_shutdown_begin", "Shutting down server", nil)
 	if err := httpServer.Shutdown(ctx); err != nil {
-		log.Printf("Error during shutdown: %v", err)
+		logEvent(opts.LogFormat, "server_shutdown_error", "Error during shutdown",
+			map[string]interface{}{"err": err.Error()})
 	}
 
 	// Surface any fatal ListenAndServe error.
@@ -134,6 +172,6 @@ func RunServer(opts ServeOptions) error {
 	default:
 	}
 
-	log.Println("Server stopped")
+	logEvent(opts.LogFormat, "server_stopped", "Server stopped", nil)
 	return nil
 }

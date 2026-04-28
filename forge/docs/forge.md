@@ -196,7 +196,7 @@ Each project gets a `/24` subnet within the `10.0.0.0/16` network:
 |---------|-------------|
 | `forge status` | In a project: show that project's subnet. Outside a project: cluster-wide allocation table. Supports `-json`. |
 | `forge doctor` | Preflight checks: tofu / lxc / jq on `$PATH`, `subnets.json` valid JSON, `config.yaml` loadable, `start_win.sh` and lxd_scripts present, `lxc cluster list` parseable, config server `/status` reachable. Exits non-zero on any FAIL. Supports `-json`. |
-| `forge config` | Print resolved deploy config (server IP, port, idle timeout, scripts dir, subnets file) plus the `config.yaml` path actually loaded — or `(none)` if running on built-in defaults. Supports `-json`. |
+| `forge config` | Print resolved deploy config plus the `config.yaml` path actually loaded. Supports `-json`. |
 
 ### Server control
 
@@ -213,21 +213,17 @@ Each project gets a `/24` subnet within the `10.0.0.0/16` network:
 | `forge subnets list` | Print every allocation in `subnets.json`. Supports `-json`. |
 | `forge subnets free <project>` | Release a project's subnet. Confirms before writing; `-yes` to skip. |
 | `forge subnets reserve <project> <octet>` | Hand-allocate a specific octet. Confirms before writing; `-yes` to skip. |
-| `forge import <project>` | Register an existing LXD project (created outside forge) by inferring its octet from the OVN network's `ipv4.address`. Confirms before writing. |
+| `forge import <project>` | Register an existing LXD project by inferring its octet from the OVN network's `ipv4.address`. Confirms before writing. |
 
 ### LXD operations (script wrappers)
 
-These delegate to the bash scripts in `/home/ceroc/InSPIRE/bin/scripts/`. The
-forge wrapper adds a per-instance preview and confirmation prompt where
-appropriate.
-
 | Command | Description |
 |---------|-------------|
-| `forge snapshot <project>` | Wraps `snapshot.sh`. Timestamped snapshot of every instance. |
-| `forge start <project>` | Wraps `start_vms.sh`. Starts every instance. |
-| `forge stop <project>` | Wraps `stop_vms.sh`. Force-stops every instance. |
+| `forge snapshot <project>` | Wraps `snapshot.sh`. |
+| `forge start <project>` | Wraps `start_vms.sh`. |
+| `forge stop <project>` | Wraps `stop_vms.sh`. |
 | `forge migrate <project> <target> [--source <node>]` | Wraps `move_vms.sh` (whole project) or `move_vms_nodes.sh` (drain a single source node). Prints affected instances and prompts before running. |
-| `forge networks prune <prefix> [--project P] [--dry-run]` | Wraps `remove_networks.sh`. Deletes orphan OVN networks by name prefix. The script asks you to re-type the prefix to confirm; `-yes` skips that. |
+| `forge networks prune <prefix> [--project P] [--dry-run]` | Wraps `remove_networks.sh`. Deletes orphan OVN networks by prefix. |
 
 ### Other
 
@@ -242,7 +238,7 @@ appropriate.
 |------|--------|
 | `-chdir=DIR` | Change to `DIR` before executing |
 | `-json` | Emit JSON output for `status`, `subnets list`, `config`, `doctor` |
-| `-yes` / `-y` | Skip interactive confirmation prompts (subnets free / reserve, import, migrate). The networks-prune confirmation is enforced inside `remove_networks.sh` and is also bypassed by this flag. |
+| `-yes` / `-y` | Skip interactive confirmation prompts |
 | `-completion=bash\|zsh` | Print a shell completion script to stdout and exit |
 | `-help` | Show help |
 | `-version` | Show version |
@@ -256,13 +252,7 @@ forge -completion=bash | sudo tee /etc/bash_completion.d/forge >/dev/null
 # Zsh (per-user):
 mkdir -p ~/.zsh/completions
 forge -completion=zsh > ~/.zsh/completions/_forge
-# then in ~/.zshrc:
-fpath=(~/.zsh/completions $fpath); autoload -Uz compinit && compinit
 ```
-
-The completion covers top-level commands and the `subnets` / `networks`
-sub-trees. It does not currently autocomplete project names — those still
-have to be typed.
 
 ## Configuration
 
