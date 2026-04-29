@@ -1,0 +1,1 @@
+{"name":"TestProj","group":"Education","team_count":2,"template":"custom","topology":{"networks":[{"name":"lan"}],"team_firewall":{"interfaces":[{"eth_name":"eth1","network":"lan","ip":"192.168.1.1/24"}]},"vms":[{"name":"box","image":"ubuntu-2204-local","profile":"default","networks":["lan"]}]}}

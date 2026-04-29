@@ -83,7 +83,11 @@
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M14 8A6 6 0 112 8a6 6 0 0112 0z" stroke="currentColor" stroke-width="1.5"/><path d="M14 3v5h-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                             Refresh
                         </button>
-                        <button class="btn btn-primary" id="btn-command-palette" title="Command Palette (Ctrl+K)">
+                        <button class="btn btn-primary" id="btn-new-project" title="Create New Project">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                            New Project
+                        </button>
+                        <button class="btn btn-secondary" id="btn-command-palette" title="Command Palette (Ctrl+K)">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5 3l6 5-6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                             Commands
                         </button>
@@ -157,6 +161,198 @@
                     </div>
                 </div>
                 <div id="templates-list" class="resource-list"></div>
+            </div>
+            <!-- Wizard View -->
+            <div id="view-wizard" class="view hidden">
+                <div class="view-header">
+                    <div class="detail-header-left">
+                        <button class="btn btn-ghost" id="btn-wizard-cancel">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            Cancel
+                        </button>
+                        <div>
+                            <h1>Create Project</h1>
+                            <p class="view-subtitle" id="wizard-subtitle">Step 1 of 4: Basic Info</p>
+                        </div>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-primary hidden" id="btn-wizard-create">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            Create Project
+                        </button>
+                    </div>
+                </div>
+
+                <div class="wizard-container">
+                    <!-- Step 1: Project Info -->
+                    <div id="wizard-step-1" class="wizard-step">
+                        <h2 class="wizard-step-title">Basic Information</h2>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Project Name</label>
+                                <input type="text" id="wiz-name" class="form-control" placeholder="e.g. CSC-3410-Fall" />
+                                <small>Letters, digits, dashes, underscores. 2-41 chars.</small>
+                            </div>
+                            <div class="form-group">
+                                <label>Team Count</label>
+                                <input type="number" id="wiz-teams" class="form-control" value="1" min="1" max="100" />
+                                <small>Number of teams to provision.</small>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Group</label>
+                                <select id="wiz-group" class="form-control">
+                                    <option value="Education">Education</option>
+                                    <option value="Research">Research</option>
+                                    <option value="Outreach">Outreach</option>
+                                    <option value="CIG">CIG</option>
+                                </select>
+                            </div>
+                            <div class="form-group hidden" id="wiz-subgroup-group">
+                                <label>CIG Sub Group</label>
+                                <select id="wiz-subgroup" class="form-control">
+                                    <option value="DCIG">DCIG</option>
+                                    <option value="OCIG">OCIG</option>
+                                    <option value="COMP">COMP</option>
+                                    <option value="CTF">CTF</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Research-only: GPU / placement -->
+                        <div id="wiz-research-block" class="hidden research-block">
+                            <h3 class="wizard-section-title">Research: Compute Placement</h3>
+                            <div class="form-group">
+                                <label>GPU required?</label>
+                                <div class="radio-row">
+                                    <label class="radio-pill">
+                                        <input type="radio" name="wiz-gpu" value="false" checked>
+                                        <span>No GPU</span>
+                                    </label>
+                                    <label class="radio-pill">
+                                        <input type="radio" name="wiz-gpu" value="true">
+                                        <span>Needs GPU (micro-07-gpu)</span>
+                                    </label>
+                                </div>
+                                <small>GPU VMs are pinned to <code>micro-07-gpu</code>. Non-GPU VMs use the placement choice below.</small>
+                            </div>
+                            <div class="form-group">
+                                <label>Cluster placement (non-GPU VMs)</label>
+                                <select id="wiz-placement" class="form-control">
+                                    <option value="default">All nodes / cluster default (recommended)</option>
+                                    <option value="round_robin">Round-robin micro-01..09 (excluding 07)</option>
+                                    <option value="pinned">Pin to a single node</option>
+                                </select>
+                            </div>
+                            <div class="form-group hidden" id="wiz-pinned-target-group">
+                                <label>Pinned Node</label>
+                                <select id="wiz-pinned-target" class="form-control">
+                                    <option value="micro-01">micro-01</option>
+                                    <option value="micro-02">micro-02</option>
+                                    <option value="micro-03">micro-03</option>
+                                    <option value="micro-04">micro-04</option>
+                                    <option value="micro-05">micro-05</option>
+                                    <option value="micro-06">micro-06</option>
+                                    <option value="micro-08">micro-08</option>
+                                    <option value="micro-09">micro-09</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="wizard-footer">
+                            <button class="btn btn-primary" id="btn-wiz-next-1">Next: Template</button>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Template -->
+                    <div id="wizard-step-2" class="wizard-step hidden">
+                        <h2 class="wizard-step-title">Choose a Template</h2>
+                        <p class="view-subtitle" style="margin-bottom: 18px;">Pick an existing template from the <code>range/</code> folder, or build a custom topology from scratch.</p>
+                        <div class="template-grid" id="wiz-template-grid">
+                            <!-- Populated dynamically -->
+                        </div>
+                        <div class="wizard-footer">
+                            <button class="btn btn-secondary" id="btn-wiz-prev-2">Back</button>
+                            <button class="btn btn-primary" id="btn-wiz-next-2" disabled>Next</button>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Custom Topology -->
+                    <div id="wizard-step-3" class="wizard-step hidden">
+                        <h2 class="wizard-step-title">Custom Topology</h2>
+
+                        <div class="topology-builder">
+
+                            <div class="topo-section">
+                                <h3>Network Mode</h3>
+                                <div class="radio-row">
+                                    <label class="radio-pill">
+                                        <input type="radio" name="wiz-net-mode" value="multi" checked>
+                                        <span>Multi-network (per team)</span>
+                                    </label>
+                                    <label class="radio-pill">
+                                        <input type="radio" name="wiz-net-mode" value="single">
+                                        <span>Single network (one team)</span>
+                                    </label>
+                                </div>
+                                <small class="text-muted">Single network forces team_count=1 in the generated tfvars.</small>
+                            </div>
+
+                            <div class="topo-section">
+                                <h3>Networks</h3>
+                                <p class="text-muted text-sm">Each entry becomes an OVN segment created per team (e.g. <code>${name}-team1-lan</code>).</p>
+                                <div id="topo-networks" class="topo-list"></div>
+                                <button class="btn btn-secondary btn-sm" id="btn-add-network">+ Add Network</button>
+                            </div>
+
+                            <div class="topo-section">
+                                <h3>Project Firewall (auto-configured)</h3>
+                                <p class="text-muted text-sm">The project firewall is created automatically with fixed interfaces:</p>
+                                <div class="static-fw-info">
+                                    <div class="static-fw-row"><span class="eth-label">eth0</span> <span>Upstream WAN (DHCP)</span></div>
+                                    <div class="static-fw-row"><span class="eth-label">eth1</span> <span>team_wan network</span></div>
+                                    <div class="static-fw-row"><span class="eth-label">eth2</span> <span>salt_lan network</span></div>
+                                </div>
+                            </div>
+
+                            <div class="topo-section">
+                                <h3>Team Firewall (always present)</h3>
+                                <p class="text-muted text-sm"><code>eth0</code> is the team WAN (DHCP). Map remaining interfaces to your networks with static IPs.</p>
+                                <div id="topo-fw-interfaces" class="topo-list"></div>
+                                <button class="btn btn-secondary btn-sm" id="btn-add-fw-interface">+ Add Team FW Interface</button>
+                            </div>
+
+                            <div class="topo-section">
+                                <h3>Virtual Machines</h3>
+                                <p class="text-muted text-sm">Each VM is replicated <em>once per team</em>.</p>
+                                <div id="topo-vms" class="topo-list-vms"></div>
+                                <button class="btn btn-secondary btn-sm" id="btn-add-vm">+ Add VM</button>
+                            </div>
+
+                        </div>
+                        <div class="wizard-footer mt-4">
+                            <button class="btn btn-secondary" id="btn-wiz-prev-3">Back</button>
+                            <button class="btn btn-primary" id="btn-wiz-next-3">Next: Review</button>
+                        </div>
+                    </div>
+
+                    <!-- Step 4: Review -->
+                    <div id="wizard-step-4" class="wizard-step hidden">
+                        <h2 class="wizard-step-title">Review &amp; Create</h2>
+                        <div class="review-panel">
+                            <h3>Project Summary</h3>
+                            <div class="review-grid" id="wiz-review-summary"></div>
+
+                            <h3 class="mt-4">Generated main.tf Preview</h3>
+                            <pre class="code-preview" id="wiz-preview-hcl">Loading preview...</pre>
+                        </div>
+                        <div class="wizard-footer mt-4">
+                            <button class="btn btn-secondary" id="btn-wiz-prev-4">Back</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </main>
     </div>

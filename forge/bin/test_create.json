@@ -1,0 +1,20 @@
+{
+  "name": "ResearchProj",
+  "group": "Research",
+  "team_count": 4,
+  "template": "custom",
+  "needs_gpu": false,
+  "topology": {
+    "network_mode": "multi",
+    "networks": [{"name": "lan"}, {"name": "dmz"}],
+    "project_firewall": {"image": "openwrt-project", "profile": "pfsense", "wan_network": "CLASS_WAN", "interfaces": [{"eth_name": "eth3", "network": "dmz", "ip": "10.10.0.1/24"}]},
+    "team_firewall":    {"image": "openwrt-team-new", "profile": "pfsense", "wan_network": "", "interfaces": [{"eth_name": "eth1", "network": "lan", "ip": "192.168.1.1/24"}]},
+    "vms": [
+      {"name": "Jumpbox", "image": "ubuntu-2204-local", "profile": "guac-linux", "type": "virtual-machine", "networks": ["lan"], "cpu": "2", "memory": "4GiB", "disk_size": "50GiB", "needs_gpu": false, "target": "round_robin"}
+    ],
+    "placement_mode": "round_robin",
+    "pinned_target": "",
+    "include_salt": true,
+    "include_project_fw": true
+  }
+}

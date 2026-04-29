@@ -12,6 +12,7 @@ import (
 func RegisterAPI(mux *http.ServeMux, b Backend, cfg ServeConfig) {
 	mux.HandleFunc("/api/info", handleInfo(b))
 	mux.HandleFunc("/api/projects/create", handleCreateProject(b, cfg))
+	mux.HandleFunc("/api/projects/preview", handlePreviewProject())
 	mux.HandleFunc("/api/projects", handleProjects(b))
 	mux.HandleFunc("/api/projects/", handleProjectDetail(b))
 	mux.HandleFunc("/api/lxd/images", handleImages(b))
@@ -183,6 +184,63 @@ func handleCreateProject(b Backend, cfg ServeConfig) http.HandlerFunc {
 
 		log.Printf("[WIZARD] Project created: %s at %s (%d files)", result.Name, result.OutputDir, len(result.Files))
 		writeJSON(w, result)
+	}
+}
+
+// handlePreviewProject handles POST /api/projects/preview.
+func handlePreviewProject() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// CORS preflight
+		if r.Method == http.MethodOptions {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "failed to read request body", http.StatusBadRequest)
+			return
+		}
+		defer r.Body.Close()
+
+		var req CreateProjectRequest
+		if err := json.Unmarshal(body, &req); err != nil {
+			http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if req.Template != "custom" || req.Topology == nil {
+			writeJSON(w, map[string]string{
+				"hcl": "# This template is copied verbatim from the templates directory.\n# Preview is only generated for custom topologies built in the wizard.",
+			})
+			return
+		}
+
+		topo := *req.Topology
+		if req.NeedsGPU {
+			for i := range topo.VMs {
+				if !topo.VMs[i].NeedsGPU && topo.VMs[i].Target == "" {
+					topo.VMs[i].NeedsGPU = true
+				}
+			}
+		}
+
+		hcl, err := GenerateMainTF(req.Name, req.TeamCount, topo)
+		if err != nil {
+			log.Printf("[ERROR] GenerateMainTF preview: %v", err)
+			writeJSON(w, map[string]interface{}{"error": err.Error()})
+			return
+		}
+
+		writeJSON(w, map[string]string{"hcl": hcl})
 	}
 }
 

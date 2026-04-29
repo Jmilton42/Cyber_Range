@@ -35,7 +35,9 @@ func NewMockBackend(testdataDir string, projectRoots []string) *MockBackend {
 func (m *MockBackend) IsMock() bool { return true }
 
 // ListProjects reads the fixture subnets.json and resolves work dirs
-// by scanning projectRoots for matching directory names.
+// by scanning projectRoots for matching directory names. It then
+// appends any wizard-created projects found under testdata/generated/
+// so the UI sees them immediately after a successful wizard run.
 func (m *MockBackend) ListProjects() ([]Project, error) {
 	data, err := os.ReadFile(filepath.Join(m.testdataDir, "subnets.json"))
 	if err != nil {
@@ -48,6 +50,7 @@ func (m *MockBackend) ListProjects() ([]Project, error) {
 	}
 
 	projects := make([]Project, 0, len(sd.Allocations))
+	seen := map[string]bool{}
 	for _, alloc := range sd.Allocations {
 		p := Project{
 			Name:        alloc.Project,
@@ -57,7 +60,6 @@ func (m *MockBackend) ListProjects() ([]Project, error) {
 			AllocatedAt: alloc.AllocatedAt,
 			Status:      "unknown",
 		}
-		// Try to resolve a work directory
 		if dir := m.resolveProjectDir(alloc.Project); dir != "" {
 			p.WorkDir = dir
 			p.Status = "active"
@@ -68,8 +70,61 @@ func (m *MockBackend) ListProjects() ([]Project, error) {
 			p.Status = "missing_dir"
 		}
 		projects = append(projects, p)
+		seen[p.Name] = true
 	}
+
+	// Surface projects scaffolded by the wizard (testdata/generated/)
+	// even when they have no allocation yet. Octet starts at 100 so
+	// the synthetic subnets don't collide with the fixture range.
+	genDir := filepath.Join(m.testdataDir, "generated")
+	if entries, err := os.ReadDir(genDir); err == nil {
+		octet := 100
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			name := e.Name()
+			if seen[name] {
+				continue
+			}
+			full := filepath.Join(genDir, name)
+			p := Project{
+				Name:        name,
+				SubnetOctet: octet,
+				Subnet:      forge.FormatSubnet(octet),
+				Gateway:     forge.FormatGateway(octet),
+				AllocatedAt: readCreatedAt(full),
+				WorkDir:     full,
+				Status:      "active",
+			}
+			if _, err := os.Stat(filepath.Join(full, "main.tf")); err == nil {
+				p.HasMainTF = true
+			}
+			projects = append(projects, p)
+			octet++
+		}
+	}
+
 	return projects, nil
+}
+
+// readCreatedAt looks for the .rangestudio.json metadata file the
+// wizard writes and returns its created_at timestamp. Falls back to
+// the directory's mtime if the file is missing or malformed.
+func readCreatedAt(dir string) string {
+	metaPath := filepath.Join(dir, ".rangestudio.json")
+	if data, err := os.ReadFile(metaPath); err == nil {
+		var meta struct {
+			CreatedAt string `json:"created_at"`
+		}
+		if err := json.Unmarshal(data, &meta); err == nil && meta.CreatedAt != "" {
+			return meta.CreatedAt
+		}
+	}
+	if info, err := os.Stat(dir); err == nil {
+		return info.ModTime().Format("2006-01-02T15:04:05Z")
+	}
+	return ""
 }
 
 // GetProject returns detail for a single project.

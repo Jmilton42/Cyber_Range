@@ -46,7 +46,12 @@ func Run(cfg ServeConfig) error {
 	if frontendDir != "" {
 		log.Printf("[RANGE STUDIO] Serving frontend from: %s", frontendDir)
 		fs := http.FileServer(http.Dir(frontendDir))
-		mux.Handle("/", fs)
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			w.Header().Set("Pragma", "no-cache")
+			w.Header().Set("Expires", "0")
+			fs.ServeHTTP(w, r)
+		})
 	} else {
 		log.Println("[WARN] No frontend directory found; API-only mode")
 		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
