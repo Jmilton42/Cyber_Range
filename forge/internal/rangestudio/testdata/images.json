@@ -1,0 +1,83 @@
+[
+  {
+    "aliases": ["ubuntu-2204-local"],
+    "fingerprint": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+    "description": "Ubuntu 22.04 LTS (local custom)",
+    "size": 1073741824,
+    "type": "virtual-machine",
+    "uploaded_at": "2025-06-15T08:00:00Z",
+    "architecture": "x86_64"
+  },
+  {
+    "aliases": ["windows-10-base"],
+    "fingerprint": "b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3",
+    "description": "Windows 10 base image",
+    "size": 8589934592,
+    "type": "virtual-machine",
+    "uploaded_at": "2025-05-20T12:00:00Z",
+    "architecture": "x86_64"
+  },
+  {
+    "aliases": ["windows-2019-base"],
+    "fingerprint": "c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4",
+    "description": "Windows Server 2019 base image",
+    "size": 9663676416,
+    "type": "virtual-machine",
+    "uploaded_at": "2025-05-20T12:30:00Z",
+    "architecture": "x86_64"
+  },
+  {
+    "aliases": ["guac-xfce4-v01"],
+    "fingerprint": "d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5",
+    "description": "Guacamole XFCE4 desktop v01",
+    "size": 2147483648,
+    "type": "virtual-machine",
+    "uploaded_at": "2025-07-01T09:00:00Z",
+    "architecture": "x86_64"
+  },
+  {
+    "aliases": ["guac-xfce4-v02"],
+    "fingerprint": "e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6",
+    "description": "Guacamole XFCE4 desktop v02 (updated)",
+    "size": 2362232012,
+    "type": "virtual-machine",
+    "uploaded_at": "2025-09-15T10:00:00Z",
+    "architecture": "x86_64"
+  },
+  {
+    "aliases": ["openwrt-project"],
+    "fingerprint": "f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1",
+    "description": "OpenWrt project firewall image",
+    "size": 268435456,
+    "type": "container",
+    "uploaded_at": "2025-04-10T14:00:00Z",
+    "architecture": "x86_64"
+  },
+  {
+    "aliases": ["openwrt-team-new"],
+    "fingerprint": "a1c2e3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2",
+    "description": "OpenWrt team firewall image (new)",
+    "size": 285212672,
+    "type": "container",
+    "uploaded_at": "2025-06-01T11:00:00Z",
+    "architecture": "x86_64"
+  },
+  {
+    "aliases": ["salt-master-new"],
+    "fingerprint": "b3d5e7f9a1b3d5e7f9a1b3d5e7f9a1b3d5e7f9a1b3d5e7f9a1b3d5e7f9a1b3d5",
+    "description": "Salt master VM image (new)",
+    "size": 1610612736,
+    "type": "virtual-machine",
+    "uploaded_at": "2025-08-01T15:00:00Z",
+    "architecture": "x86_64"
+  },
+  {
+    "aliases": ["parrot-v2"],
+    "fingerprint": "c5e7f9a1b3c5e7f9a1b3c5e7f9a1b3c5e7f9a1b3c5e7f9a1b3c5e7f9a1b3c5e7",
+    "description": "Parrot Security OS v2",
+    "size": 3221225472,
+    "type": "virtual-machine",
+    "uploaded_at": "2025-07-20T08:30:00Z",
+    "architecture": "x86_64"
+  }
+]

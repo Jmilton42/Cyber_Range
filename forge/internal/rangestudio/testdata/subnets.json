@@ -1,0 +1,29 @@
+{
+  "allocations": [
+    {
+      "project": "CSC-3410",
+      "subnet_octet": 1,
+      "allocated_at": "2025-08-15T10:00:00Z"
+    },
+    {
+      "project": "CIG-Lab",
+      "subnet_octet": 2,
+      "allocated_at": "2025-09-01T14:30:00Z"
+    },
+    {
+      "project": "CPTC-Mock",
+      "subnet_octet": 3,
+      "allocated_at": "2025-10-12T09:15:00Z"
+    },
+    {
+      "project": "DCIGS",
+      "subnet_octet": 4,
+      "allocated_at": "2025-11-20T16:45:00Z"
+    },
+    {
+      "project": "Research-GPU",
+      "subnet_octet": 5,
+      "allocated_at": "2026-01-10T11:00:00Z"
+    }
+  ]
+}

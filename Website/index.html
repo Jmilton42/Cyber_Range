@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Range Studio — InSPIRE Cyber Range</title>
+    <meta name="description" content="Range Studio: project explorer, command palette, and authoring UI for the InSPIRE Cyber Range platform.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Mock Mode Banner -->
+    <div id="mock-banner" class="mock-banner hidden">
+        <span class="mock-banner-icon">⚠</span>
+        <span>Mock Mode — not connected to range</span>
+    </div>
+
+    <!-- App Shell -->
+    <div id="app" class="app">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <div class="logo-icon">
+                        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                            <rect x="2" y="2" width="24" height="24" rx="6" stroke="url(#logoGrad)" stroke-width="2.5"/>
+                            <path d="M8 14h12M14 8v12" stroke="url(#logoGrad)" stroke-width="2" stroke-linecap="round"/>
+                            <defs><linearGradient id="logoGrad" x1="2" y1="2" x2="26" y2="26"><stop stop-color="#00d4ff"/><stop offset="1" stop-color="#7b61ff"/></linearGradient></defs>
+                        </svg>
+                    </div>
+                    <div class="logo-text">
+                        <span class="logo-title">Range Studio</span>
+                        <span class="logo-sub">InSPIRE Platform</span>
+                    </div>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <button class="nav-item active" data-view="projects" id="nav-projects">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="1" y="1" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="10" y="1" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="1" y="10" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="10" y="10" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.5"/></svg>
+                    <span>Projects</span>
+                </button>
+                <button class="nav-item" data-view="images" id="nav-images">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="1" y="3" width="16" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/><circle cx="6" cy="8" r="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M1 13l4-3 3 2 4-4 5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span>Images</span>
+                </button>
+                <button class="nav-item" data-view="profiles" id="nav-profiles">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M3 3h12v2H3zM3 8h12v2H3zM3 13h12v2H3z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                    <span>Profiles</span>
+                </button>
+                <button class="nav-item" data-view="cluster" id="nav-cluster">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="9" cy="3" r="1.5" stroke="currentColor" stroke-width="1.2"/><circle cx="15" cy="9" r="1.5" stroke="currentColor" stroke-width="1.2"/><circle cx="9" cy="15" r="1.5" stroke="currentColor" stroke-width="1.2"/><circle cx="3" cy="9" r="1.5" stroke="currentColor" stroke-width="1.2"/><line x1="9" y1="5" x2="9" y2="7" stroke="currentColor" stroke-width="1"/><line x1="13" y1="9" x2="11" y2="9" stroke="currentColor" stroke-width="1"/><line x1="9" y1="13" x2="9" y2="11" stroke="currentColor" stroke-width="1"/><line x1="5" y1="9" x2="7" y2="9" stroke="currentColor" stroke-width="1"/></svg>
+                    <span>Cluster</span>
+                </button>
+                <button class="nav-item" data-view="templates" id="nav-templates">
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 2h7l5 5v9a2 2 0 01-2 2H4a2 2 0 01-2-2V4a2 2 0 012-2z" stroke="currentColor" stroke-width="1.5"/><path d="M11 2v5h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                    <span>Templates</span>
+                </button>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="sidebar-version" id="sidebar-version">v1.0.0</div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main id="main-content" class="main-content">
+            <!-- Loading State -->
+            <div id="loading" class="loading-state">
+                <div class="spinner"></div>
+                <p>Connecting to Range Studio…</p>
+            </div>
+
+            <!-- Projects View -->
+            <div id="view-projects" class="view hidden">
+                <div class="view-header">
+                    <div>
+                        <h1 id="projects-heading">Range Projects</h1>
+                        <p class="view-subtitle">Subnet allocations and project status</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary" id="btn-refresh" title="Refresh">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M14 8A6 6 0 112 8a6 6 0 0112 0z" stroke="currentColor" stroke-width="1.5"/><path d="M14 3v5h-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            Refresh
+                        </button>
+                        <button class="btn btn-primary" id="btn-command-palette" title="Command Palette (Ctrl+K)">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5 3l6 5-6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            Commands
+                        </button>
+                    </div>
+                </div>
+                <div id="projects-grid" class="projects-grid"></div>
+            </div>
+
+            <!-- Project Detail View -->
+            <div id="view-project-detail" class="view hidden">
+                <div class="view-header">
+                    <div class="detail-header-left">
+                        <button class="btn btn-ghost" id="btn-back">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            Back
+                        </button>
+                        <div>
+                            <h1 id="detail-project-name">Project</h1>
+                            <p class="view-subtitle" id="detail-subtitle">—</p>
+                        </div>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" id="btn-detail-commands">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M5 3l6 5-6 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            Commands
+                        </button>
+                    </div>
+                </div>
+                <div id="detail-content" class="detail-content"></div>
+            </div>
+
+            <!-- Images View -->
+            <div id="view-images" class="view hidden">
+                <div class="view-header">
+                    <div>
+                        <h1>LXD Images</h1>
+                        <p class="view-subtitle">Local image catalog</p>
+                    </div>
+                </div>
+                <div id="images-list" class="resource-list"></div>
+            </div>
+
+            <!-- Profiles View -->
+            <div id="view-profiles" class="view hidden">
+                <div class="view-header">
+                    <div>
+                        <h1>LXD Profiles</h1>
+                        <p class="view-subtitle">Instance profiles and resource limits</p>
+                    </div>
+                </div>
+                <div id="profiles-list" class="resource-list"></div>
+            </div>
+
+            <!-- Cluster View -->
+            <div id="view-cluster" class="view hidden">
+                <div class="view-header">
+                    <div>
+                        <h1>Cluster Members</h1>
+                        <p class="view-subtitle">LXD cluster node status</p>
+                    </div>
+                </div>
+                <div id="cluster-list" class="resource-list"></div>
+            </div>
+
+            <!-- Templates View -->
+            <div id="view-templates" class="view hidden">
+                <div class="view-header">
+                    <div>
+                        <h1>Project Templates</h1>
+                        <p class="view-subtitle">Available templates for new projects</p>
+                    </div>
+                </div>
+                <div id="templates-list" class="resource-list"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Command Palette Overlay -->
+    <div id="command-palette" class="command-palette hidden">
+        <div class="command-palette-backdrop"></div>
+        <div class="command-palette-dialog">
+            <div class="command-palette-header">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M5 3l6 5-6 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span>Command Palette</span>
+                <span class="command-palette-project" id="palette-project-name"></span>
+                <button class="command-palette-close" id="btn-palette-close">
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                </button>
+            </div>
+            <div class="command-palette-body" id="palette-commands"></div>
+        </div>
+    </div>
+
+    <!-- Context Menu -->
+    <div id="context-menu" class="context-menu hidden">
+        <div class="context-menu-items" id="context-menu-items"></div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>

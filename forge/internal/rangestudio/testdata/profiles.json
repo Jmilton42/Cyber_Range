@@ -1,0 +1,80 @@
+[
+  {
+    "name": "default",
+    "description": "Default LXD profile",
+    "devices": {
+      "root": {
+        "path": "/",
+        "pool": "local",
+        "type": "disk",
+        "size": "50GiB"
+      }
+    },
+    "config": {}
+  },
+  {
+    "name": "guac-linux",
+    "description": "Guacamole Linux desktop VM profile",
+    "devices": {
+      "root": {
+        "path": "/",
+        "pool": "local",
+        "type": "disk",
+        "size": "50GiB"
+      }
+    },
+    "config": {
+      "limits.cpu": "2",
+      "limits.memory": "4GiB"
+    }
+  },
+  {
+    "name": "default-windows",
+    "description": "Default Windows VM profile",
+    "devices": {
+      "root": {
+        "path": "/",
+        "pool": "local",
+        "type": "disk",
+        "size": "80GiB"
+      }
+    },
+    "config": {
+      "limits.cpu": "4",
+      "limits.memory": "8GiB"
+    }
+  },
+  {
+    "name": "pfsense",
+    "description": "OpenWrt / pfSense firewall profile",
+    "devices": {
+      "root": {
+        "path": "/",
+        "pool": "local",
+        "type": "disk",
+        "size": "10GiB"
+      }
+    },
+    "config": {
+      "limits.cpu": "1",
+      "limits.memory": "512MiB",
+      "security.privileged": "true"
+    }
+  },
+  {
+    "name": "Salt-master",
+    "description": "Salt master server profile",
+    "devices": {
+      "root": {
+        "path": "/",
+        "pool": "local",
+        "type": "disk",
+        "size": "50GiB"
+      }
+    },
+    "config": {
+      "limits.cpu": "2",
+      "limits.memory": "4GiB"
+    }
+  }
+]

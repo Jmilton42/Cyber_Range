@@ -1,0 +1,74 @@
+[
+  {
+    "server_name": "micro-01",
+    "url": "https://10.8.11.1:8443",
+    "status": "Online",
+    "roles": ["database"],
+    "architecture": "x86_64",
+    "gpu": false
+  },
+  {
+    "server_name": "micro-02",
+    "url": "https://10.8.11.2:8443",
+    "status": "Online",
+    "roles": ["database"],
+    "architecture": "x86_64",
+    "gpu": false
+  },
+  {
+    "server_name": "micro-03",
+    "url": "https://10.8.11.3:8443",
+    "status": "Online",
+    "roles": ["database"],
+    "architecture": "x86_64",
+    "gpu": false
+  },
+  {
+    "server_name": "micro-04",
+    "url": "https://10.8.11.4:8443",
+    "status": "Online",
+    "roles": [],
+    "architecture": "x86_64",
+    "gpu": false
+  },
+  {
+    "server_name": "micro-05",
+    "url": "https://10.8.11.5:8443",
+    "status": "Online",
+    "roles": [],
+    "architecture": "x86_64",
+    "gpu": false
+  },
+  {
+    "server_name": "micro-06",
+    "url": "https://10.8.11.6:8443",
+    "status": "Online",
+    "roles": [],
+    "architecture": "x86_64",
+    "gpu": false
+  },
+  {
+    "server_name": "micro-07-gpu",
+    "url": "https://10.8.11.7:8443",
+    "status": "Online",
+    "roles": ["database"],
+    "architecture": "x86_64",
+    "gpu": true
+  },
+  {
+    "server_name": "micro-08",
+    "url": "https://10.8.11.8:8443",
+    "status": "Online",
+    "roles": [],
+    "architecture": "x86_64",
+    "gpu": false
+  },
+  {
+    "server_name": "micro-09",
+    "url": "https://10.8.11.9:8443",
+    "status": "Online",
+    "roles": [],
+    "architecture": "x86_64",
+    "gpu": false
+  }
+]
