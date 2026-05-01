@@ -546,8 +546,6 @@ func GenerateMainTF(projectName string, teamCount int, topo CustomTopology) (str
 				t = mode
 			}
 			switch t {
-			case "round_robin":
-				return `  target = "@${local.non_gpu_nodes[count.index % length(local.non_gpu_nodes)]}"`
 			case "default", "":
 				return "  # target left unset (cluster default)"
 			default:
