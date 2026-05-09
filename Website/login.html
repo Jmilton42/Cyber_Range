@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign in — Range Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="auth-body">
+    <main class="auth-shell">
+        <div class="auth-card">
+            <div class="auth-brand">
+                <div class="logo-icon" id="brand-logo-icon" style="width:40px;height:40px;font-size:1.15rem;border-radius:9px;">R</div>
+                <div>
+                    <div class="auth-brand-title" id="brand-title">Range Studio</div>
+                    <div class="auth-brand-sub" id="brand-tagline">InSPIRE Platform</div>
+                </div>
+            </div>
+
+            <h1 class="auth-title">Sign in</h1>
+            <p class="auth-desc">Authentication is not yet enabled. This page is a placeholder for the upcoming login &amp; role-based access flow.</p>
+
+            <form class="auth-form" id="login-form" autocomplete="off">
+                <div class="form-group">
+                    <label>Email or username</label>
+                    <input type="text" class="form-control" placeholder="you@example.org" disabled />
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" class="form-control" placeholder="••••••••" disabled />
+                </div>
+                <button type="button" class="btn btn-primary auth-submit" id="btn-skip-login">Continue to app</button>
+            </form>
+
+            <p class="auth-footer-note">Once auth is wired up, role checks (admin / instructor / student) will gate the sidebar pages.</p>
+        </div>
+    </main>
+
+    <script src="common.js"></script>
+    <script>
+        // Minimal: skip straight to the app for now.
+        document.getElementById('btn-skip-login').addEventListener('click', () => {
+            window.location.href = 'index.html';
+        });
+    </script>
+</body>
+</html>

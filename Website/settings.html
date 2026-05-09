@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings — Range Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body data-page="settings">
+    <div id="rs-mock-banner" class="mock-banner hidden">
+        <span class="mock-banner-icon">⚠</span>
+        <span>Mock Mode — not connected to range</span>
+    </div>
+    <div class="app">
+        <aside id="sidebar" class="sidebar"></aside>
+        <main class="main-content">
+            <div class="view-header">
+                <div>
+                    <h1>Settings</h1>
+                    <p class="view-subtitle">Customize branding, theme, and appearance for your organization</p>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-ghost" id="btn-settings-reset">Reset to defaults</button>
+                    <button class="btn btn-primary" id="btn-settings-save">Save changes</button>
+                </div>
+            </div>
+            <div class="settings-container">
+
+                <div class="settings-section">
+                    <h2>Branding</h2>
+                    <p class="section-desc">These values appear in the sidebar and browser tab on every page.</p>
+
+                    <div class="settings-row">
+                        <div class="settings-row-label">
+                            Brand name
+                            <small>Replaces "Range Studio" in the sidebar.</small>
+                        </div>
+                        <div class="settings-row-control">
+                            <input type="text" class="form-control" id="set-brand-name" maxlength="40" placeholder="Range Studio" />
+                        </div>
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-row-label">
+                            Tagline
+                            <small>Shown beneath the brand name.</small>
+                        </div>
+                        <div class="settings-row-control">
+                            <input type="text" class="form-control" id="set-brand-tagline" maxlength="60" placeholder="InSPIRE Platform" />
+                        </div>
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-row-label">
+                            Logo
+                            <small>Upload a square image (PNG/SVG) or use the auto-generated monogram.</small>
+                        </div>
+                        <div class="settings-row-control">
+                            <div class="logo-upload-row">
+                                <div class="logo-preview" id="set-logo-preview">R</div>
+                                <input type="file" id="set-logo-file" accept="image/*" style="display:none" />
+                                <button class="btn btn-secondary" id="btn-logo-upload" type="button">Upload image…</button>
+                                <button class="btn btn-ghost" id="btn-logo-clear" type="button">Use monogram</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-row-label">
+                            Browser tab title
+                            <small>Default page title used when a page doesn't override it.</small>
+                        </div>
+                        <div class="settings-row-control">
+                            <input type="text" class="form-control" id="set-page-title" maxlength="80" placeholder="Range Studio — InSPIRE Cyber Range" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h2>Appearance</h2>
+                    <p class="section-desc">Choose a theme and accent color that match your organization.</p>
+
+                    <div class="settings-row">
+                        <div class="settings-row-label">
+                            Theme
+                            <small>Switch between dark and light interface.</small>
+                        </div>
+                        <div class="settings-row-control">
+                            <div class="theme-toggle" id="set-theme-toggle">
+                                <button data-theme="dark" class="active" type="button">Dark</button>
+                                <button data-theme="light" type="button">Light</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-row">
+                        <div class="settings-row-label">
+                            Accent color
+                            <small>Used for primary buttons, links, and highlights.</small>
+                        </div>
+                        <div class="settings-row-control">
+                            <div class="color-input-group">
+                                <input type="color" id="set-accent-color" value="#2563eb" />
+                                <input type="text" class="form-control" id="set-accent-hex" value="#2563EB" />
+                            </div>
+                            <div class="color-swatches" id="set-accent-swatches">
+                                <div class="color-swatch" data-color="#2563eb" style="background:#2563eb" title="Blue"></div>
+                                <div class="color-swatch" data-color="#0ea5e9" style="background:#0ea5e9" title="Sky"></div>
+                                <div class="color-swatch" data-color="#0d9488" style="background:#0d9488" title="Teal"></div>
+                                <div class="color-swatch" data-color="#16a34a" style="background:#16a34a" title="Green"></div>
+                                <div class="color-swatch" data-color="#7c3aed" style="background:#7c3aed" title="Violet"></div>
+                                <div class="color-swatch" data-color="#db2777" style="background:#db2777" title="Pink"></div>
+                                <div class="color-swatch" data-color="#ea580c" style="background:#ea580c" title="Orange"></div>
+                                <div class="color-swatch" data-color="#dc2626" style="background:#dc2626" title="Red"></div>
+                                <div class="color-swatch" data-color="#475569" style="background:#475569" title="Slate"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+    <script src="common.js"></script>
+    <script src="pages/settings.js"></script>
+</body>
+</html>
