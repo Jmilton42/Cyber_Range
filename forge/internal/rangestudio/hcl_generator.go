@@ -269,66 +269,6 @@ resource "lxd_instance" "project_salt" {
   }
 }
 {{end}}
-{{if .Topology.IncludeGuac}}
-##############################################################
-# GUACAMOLE SERVER
-##############################################################
-resource "lxd_network" "guac_wan" {
-  project  = data.lxd_project.proj.name
-  name     = "${var.project_name}-guac-wan"
-  type     = "ovn"
-  config   = {
-    "bridge.mtu"   = "1500"
-    "ipv4.address" = "none"
-    "network"      = "internal_link5"
-  }
-  depends_on = [data.lxd_project.proj]
-}
-
-resource "lxd_instance" "project_guac" {
-  project     = data.lxd_project.proj.name
-  name        = "${var.project_name}-guac"
-  description = "Guacamole remote access"
-  type        = "virtual-machine"
-  image       = "guac-xfce4-v02"
-  profiles    = ["guac-linux"]
-
-  device {
-    name = "eth0"
-    type = "nic"
-    properties = { network = lxd_network.guac_wan.name }
-  }
-  device {
-    name = "eth1"
-    type = "nic"
-    properties = { network = lxd_network.salt_lan.name }
-  }
-
-  config = {
-    "cloud-init.network-config" = <<-EOF
-      version: 2
-      ethernets:
-        enp5s0:
-          dhcp4: false
-          addresses:
-            - 10.0.1.2/16
-          routes:
-            - to: default
-              via: 10.0.0.1
-          nameservers:
-            addresses: [10.0.0.1]
-        enp6s0:
-          dhcp4: false
-          addresses:
-            - 172.31.31.3/24
-          nameservers:
-            addresses: [172.31.31.1]
-      EOF
-  }
-
-  depends_on = [lxd_network.salt_lan, lxd_network.guac_wan]
-}
-{{end}}
 
 ##############################################################
 # TEAM FIREWALL (OpenWRT)
@@ -462,7 +402,14 @@ resource "lxd_instance" "team_{{sanitize $vm.Name}}" {
 {{- range $i, $net := $vm.Networks}}
 {{- if eq $net "guac_wan"}}
         enp{{add $i 5}}s0:
-          dhcp4: true
+          dhcp4: false
+          addresses:
+            - 10.0.$var.guac_subnet_octet}.${3 + count.index}/16
+          routes:
+            - to: default
+              via: 10.0.0.1
+          nameservers:
+            addresses: [10.0.0.1]
 {{- else}}
 {{- $nip := findNetIp $vm.NetIPs $net}}
 {{- if $nip.IP}}
