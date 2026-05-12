@@ -212,15 +212,7 @@ resource "lxd_instance" "project_fw" {
     }
   }
 
-  config = {
-    "cloud-init.network-config" = <<-EOF
-      version: 2
-      ethernets:
-        eth0:
-          dhcp4: true
-      EOF
-  }
-
+  target = "@default"
   timeouts = {
     create = "2m"
     delete = "2m"
@@ -262,11 +254,61 @@ resource "lxd_instance" "project_salt" {
       EOF
   }
 
+  target = "@default"
   depends_on = [lxd_network.salt_lan]
   timeouts = {
     create = "15m"
     start  = "15m"
   }
+}
+{{end}}
+{{if .Topology.IncludeGuac}}
+##############################################################
+# GUACAMOLE SERVER
+##############################################################
+resource "lxd_instance" "project_guac" {
+  project     = data.lxd_project.proj.name
+  name        = "${var.project_name}-guac"
+  description = "Guacamole remote access"
+  type        = "virtual-machine"
+  image       = "guac-xfce4-v02"
+  profiles    = ["guac-linux"]
+
+  device {
+    name = "eth0"
+    type = "nic"
+    properties = { network = "GUAC_WAN" }
+  }
+  device {
+    name = "eth1"
+    type = "nic"
+    properties = { network = lxd_network.salt_lan.name }
+  }
+
+  config = {
+    "cloud-init.network-config" = <<-EOF
+      version: 2
+      ethernets:
+        enp5s0:
+          dhcp4: false
+          addresses:
+            - 10.0.${var.guac_subnet_octet}.2/16
+          routes:
+            - to: default
+              via: 10.0.0.1
+          nameservers:
+            addresses: [10.0.0.1]
+        enp6s0:
+          dhcp4: false
+          addresses:
+            - 172.31.31.3/24
+          nameservers:
+            addresses: [172.31.31.1]
+      EOF
+  }
+
+  target = "@default"
+  depends_on = [lxd_network.salt_lan]
 }
 {{end}}
 
@@ -309,13 +351,17 @@ resource "lxd_instance" "team_fw" {
           x-openwrt-name: {{.Network}}
           dhcp4: false
           addresses:
-            - {{.IP}}
+            - {{multiTeamCIDR .IP $.Topology.NetworkMode}}
+          routes:
+            - to: default
+              via: {{multiTeamIP .IP $.Topology.NetworkMode}}
           nameservers:
-            addresses: [{{trimCIDR .IP}}]
+            addresses: [{{multiTeamIP .IP $.Topology.NetworkMode}}]
 {{- end}}
       EOF
   }
 
+  target = "@default"
   timeouts = {
     create = "2m"
     delete = "2m"
@@ -326,7 +372,7 @@ resource "lxd_instance" "team_fw" {
 ################################################################
 # TEAM VMS
 ################################################################
-{{range $vm := .Topology.VMs}}
+{{range $vmIdx, $vm := .Topology.VMs}}
 resource "lxd_instance" "team_{{sanitize $vm.Name}}" {
   count       = var.team_count
   project     = data.lxd_project.proj.name
@@ -342,7 +388,7 @@ resource "lxd_instance" "team_{{sanitize $vm.Name}}" {
     type = "nic"
     properties = {
 {{- if eq $net "guac_wan"}}
-      network = lxd_network.guac_wan.name
+      network = "GUAC_WAN"
 {{- else}}
       network = lxd_network.team_{{sanitize $net}}[count.index].name
 {{- end}}
@@ -395,40 +441,34 @@ resource "lxd_instance" "team_{{sanitize $vm.Name}}" {
 {{- end}}
       EOF
 {{- end}}
-{{- if or $vm.NetIPs (hasGuacWan $vm.Networks)}}
+{{- if needsNetConfig $vm.Networks $.Topology.TeamFirewall.Interfaces}}
     "cloud-init.network-config" = <<-EOF
       version: 2
       ethernets:
 {{- range $i, $net := $vm.Networks}}
 {{- if eq $net "guac_wan"}}
-{{- $nip := findNetIp $vm.NetIPs "guac_wan"}}
-{{- if $nip.IP}}
         enp{{add $i 5}}s0:
           dhcp4: false
           addresses:
-            - {{$nip.IP}}
-{{- else}}
-        enp{{add $i 5}}s0:
-          dhcp4: false
-          addresses:
-            - 10.0.$var.guac_subnet_octet}.${3 + count.index}/16
+            - 10.0.${var.guac_subnet_octet}.${3 + count.index}/16
           routes:
             - to: default
               via: 10.0.0.1
           nameservers:
             addresses: [10.0.0.1]
 {{- else}}
-{{- $nip := findNetIp $vm.NetIPs $net}}
-{{- if $nip.IP}}
+{{- $ip := vmStaticIP $vmIdx $net $.Topology.VMs $.Topology.TeamFirewall.Interfaces $.Topology.NetworkMode}}
+{{- $gw := vmNetGW $net $.Topology.TeamFirewall.Interfaces $.Topology.NetworkMode}}
+{{- if $ip}}
         enp{{add $i 5}}s0:
           dhcp4: false
           addresses:
-            - {{$nip.IP}}
+            - {{$ip}}
           routes:
             - to: default
-              via: {{gateway $nip.IP}}
+              via: {{$gw}}
           nameservers:
-            addresses: [{{gateway $nip.IP}}]
+            addresses: [{{$gw}}]
 {{- end}}
 {{- end}}
 {{- end}}
@@ -440,6 +480,33 @@ resource "lxd_instance" "team_{{sanitize $vm.Name}}" {
 }
 {{end}}
 `
+
+// transformTeamIP turns a static CIDR like "192.168.1.1/24" into a Terraform
+// interpolation "192.168.${count.index + 1}.1/24" for multi-network mode so
+// each team gets its own subnet. In single-network mode the value is unchanged.
+func transformTeamIP(ip string, withCIDR bool, mode string) string {
+	if ip == "" {
+		return ""
+	}
+	parts := strings.Split(ip, "/")
+	hostPart := parts[0]
+	prefix := ""
+	if len(parts) == 2 {
+		prefix = parts[1]
+	}
+	octets := strings.Split(hostPart, ".")
+	if len(octets) != 4 || mode != "multi" {
+		if withCIDR {
+			return ip
+		}
+		return hostPart
+	}
+	newHost := fmt.Sprintf("%s.%s.${count.index + %s}.%s", octets[0], octets[1], octets[2], octets[3])
+	if withCIDR && prefix != "" {
+		return newHost + "/" + prefix
+	}
+	return newHost
+}
 
 // GenerateMainTF executes the text/template to output raw HCL.
 func GenerateMainTF(projectName string, teamCount int, topo CustomTopology) (string, error) {
@@ -482,6 +549,73 @@ func GenerateMainTF(projectName string, teamCount int, topo CustomTopology) (str
 			}
 			return false
 		},
+		"needsNetConfig": func(networks []string, interfaces []FWInterface) bool {
+			for _, n := range networks {
+				if n == "guac_wan" {
+					return true
+				}
+				for _, intf := range interfaces {
+					if intf.Network == n && intf.IP != "" {
+						return true
+					}
+				}
+			}
+			return false
+		},
+		"vmStaticIP": func(vmIdx int, netName string, allVMs []VMDef, interfaces []FWInterface, mode string) string {
+			var fwIP string
+			for _, intf := range interfaces {
+				if intf.Network == netName {
+					fwIP = intf.IP
+					break
+				}
+			}
+			if fwIP == "" {
+				return ""
+			}
+			parts := strings.Split(fwIP, "/")
+			host := parts[0]
+			prefix := ""
+			if len(parts) == 2 {
+				prefix = parts[1]
+			}
+			octets := strings.Split(host, ".")
+			if len(octets) != 4 {
+				return ""
+			}
+			position := 0
+			for i := 0; i < vmIdx && i < len(allVMs); i++ {
+				for _, n := range allVMs[i].Networks {
+					if n == netName {
+						position++
+						break
+					}
+				}
+			}
+			gwLast := 0
+			fmt.Sscanf(octets[3], "%d", &gwLast)
+			vmLast := gwLast + 1 + position
+			if mode == "multi" {
+				result := fmt.Sprintf("%s.%s.${count.index + %s}.%d", octets[0], octets[1], octets[2], vmLast)
+				if prefix != "" {
+					return result + "/" + prefix
+				}
+				return result
+			}
+			result := fmt.Sprintf("%s.%s.%s.%d", octets[0], octets[1], octets[2], vmLast)
+			if prefix != "" {
+				return result + "/" + prefix
+			}
+			return result
+		},
+		"vmNetGW": func(netName string, interfaces []FWInterface, mode string) string {
+			for _, intf := range interfaces {
+				if intf.Network == netName {
+					return transformTeamIP(intf.IP, false, mode)
+				}
+			}
+			return ""
+		},
 		"findNetIp": func(netIps []VMNetIP, network string) VMNetIP {
 			for _, nip := range netIps {
 				if nip.Network == network {
@@ -489,6 +623,16 @@ func GenerateMainTF(projectName string, teamCount int, topo CustomTopology) (str
 				}
 			}
 			return VMNetIP{Network: network, IP: ""}
+		},
+		// multiTeamCIDR / multiTeamIP transform a static FW interface IP like
+		// "192.168.1.1/24" into "192.168.${count.index + 1}.1/24" (or without
+		// the prefix) when mode == "multi". In single-network mode the IP is
+		// returned unchanged (only one team, so no per-team interpolation needed).
+		"multiTeamCIDR": func(ip, mode string) string {
+			return transformTeamIP(ip, true, mode)
+		},
+		"multiTeamIP": func(ip, mode string) string {
+			return transformTeamIP(ip, false, mode)
 		},
 		"placement": func(vm VMDef, mode, pinned string) string {
 			// Per-VM override wins over project default.
@@ -501,7 +645,7 @@ func GenerateMainTF(projectName string, teamCount int, topo CustomTopology) (str
 			}
 			switch t {
 			case "default", "":
-				return "  # target left unset (cluster default)"
+				return `  target = "@default"`
 			default:
 				if strings.HasPrefix(t, "micro-") || strings.HasPrefix(t, "@") {
 					tgt := strings.TrimPrefix(t, "@")
@@ -511,7 +655,7 @@ func GenerateMainTF(projectName string, teamCount int, topo CustomTopology) (str
 					return fmt.Sprintf(`  target = "@%s"`, strings.TrimPrefix(pinned, "@"))
 				}
 			}
-			return "  # target left unset (cluster default)"
+			return `  target = "@default"`
 		},
 	}
 

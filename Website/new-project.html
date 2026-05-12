@@ -26,7 +26,7 @@
                     </a>
                     <div>
                         <h1>Create Project</h1>
-                        <p class="view-subtitle" id="wizard-subtitle">Configure a new range project in four steps</p>
+                        <p class="view-subtitle" id="wizard-subtitle">Step 1 of 4 — Info</p>
                     </div>
                 </div>
                 <div class="header-actions">
@@ -48,7 +48,7 @@
                 </li>
                 <li class="step" data-step="3" id="step-indicator-3">
                     <span class="step-bubble">3</span>
-                    <span class="step-label">Topology<span class="step-sub">Networks &amp; VMs</span></span>
+                    <span class="step-label" id="step3-label">Preview<span class="step-sub">Review template</span></span>
                 </li>
                 <li class="step" data-step="4">
                     <span class="step-bubble">4</span>
@@ -57,11 +57,11 @@
             </ol>
 
             <div class="wizard-container">
-                <!-- Step 1 -->
+                <!-- Step 1: Basic Info -->
                 <div id="wizard-step-1" class="wizard-step">
                     <div class="wizard-step-head">
                         <h2 class="wizard-step-title">Basic Information</h2>
-                        <p class="wizard-step-desc">Give your project a name and choose how it should be organized.</p>
+                        <p class="wizard-step-desc">Give your project a name, description, and choose how it should be organized.</p>
                     </div>
 
                     <div class="form-row">
@@ -74,6 +74,14 @@
                             <label>Team Count</label>
                             <input type="number" id="wiz-teams" class="form-control" value="1" min="1" max="100" />
                             <small>Each team gets its own copy of every VM and network.</small>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" style="flex: 1 1 100%">
+                            <label>Description <span style="color:var(--fg-faint);font-weight:400;font-size:0.8em;">(optional)</span></label>
+                            <textarea id="wiz-desc" class="form-control" placeholder="e.g. Spring 2026 IT Security course lab environment" rows="2" style="resize:vertical;min-height:60px;"></textarea>
+                            <small>Saved to project metadata and shown on the projects list.</small>
                         </div>
                     </div>
 
@@ -143,110 +151,125 @@
                     </div>
 
                     <div class="wizard-footer">
-                        <button class="btn btn-primary" id="btn-wiz-next-1">Next: Template</button>
+                        <button class="btn btn-primary" id="btn-wiz-next-1">Next: Choose Template</button>
                     </div>
                 </div>
 
-                <!-- Step 2 -->
+                <!-- Step 2: Template Selection -->
                 <div id="wizard-step-2" class="wizard-step hidden">
                     <div class="wizard-step-head">
                         <h2 class="wizard-step-title">Choose a Template</h2>
-                        <p class="wizard-step-desc">Pick a starting topology from the <code>range/</code> folder, or build a custom one from scratch.</p>
+                        <p class="wizard-step-desc">Pick a pre-built template from the <code>range/</code> folder, or build a custom topology from scratch. Click a card to select it.</p>
                     </div>
+                    <div id="wiz-template-load-err" class="hidden" style="color:var(--warning);background:var(--warning-soft);border:1px solid var(--warning);border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;font-size:0.85em;"></div>
                     <div class="template-grid" id="wiz-template-grid"></div>
                     <div class="wizard-footer">
                         <button class="btn btn-secondary" id="btn-wiz-prev-2">Back</button>
-                        <button class="btn btn-primary" id="btn-wiz-next-2" disabled>Next</button>
+                        <button class="btn btn-primary" id="btn-wiz-next-2" disabled>Next: Preview</button>
                     </div>
                 </div>
 
-                <!-- Step 3 -->
+                <!-- Step 3: Template Preview OR Custom Topology Builder -->
                 <div id="wizard-step-3" class="wizard-step hidden">
-                    <div class="wizard-step-head">
-                        <h2 class="wizard-step-title">Custom Topology</h2>
-                        <p class="wizard-step-desc">Define the networks, firewalls, and virtual machines that make up each team's environment.</p>
+
+                    <!-- Template preview (named templates) -->
+                    <div id="wiz-step3-tpl" class="hidden">
+                        <div class="wizard-step-head">
+                            <h2 class="wizard-step-title">Template Preview</h2>
+                            <p class="wizard-step-desc">Review what this template will deploy. The files are copied as-is to your project directory — no modifications are made.</p>
+                        </div>
+                        <div class="tpl-preview-banner" id="wiz-tpl-banner"></div>
+                        <pre class="code-preview" id="wiz-step3-hcl">Loading template...</pre>
                     </div>
 
-                    <!-- Live summary -->
-                    <div class="topo-summary" id="topo-summary"></div>
+                    <!-- Custom topology builder -->
+                    <div id="wiz-step3-custom" class="hidden">
+                        <div class="wizard-step-head">
+                            <h2 class="wizard-step-title">Custom Topology</h2>
+                            <p class="wizard-step-desc">Define the networks, firewalls, and virtual machines that make up each team's environment.</p>
+                        </div>
 
-                    <div class="topology-builder">
-                        <section class="topo-card">
-                            <header class="topo-card-head">
-                                <div>
-                                    <h3>
-                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8h12M2 4h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-                                        Network Mode
-                                    </h3>
-                                    <p class="topo-card-desc">Decide how networks are scoped across teams.</p>
-                                </div>
-                            </header>
-                            <div class="radio-row">
-                                <label class="radio-pill"><input type="radio" name="wiz-net-mode" value="multi" checked><span>Multi-network (per team)</span></label>
-                                <label class="radio-pill"><input type="radio" name="wiz-net-mode" value="single"><span>Single network (one team)</span></label>
-                            </div>
-                            <small class="text-muted">Single network forces <code>team_count=1</code> in the generated tfvars.</small>
-                        </section>
+                        <!-- Live summary -->
+                        <div class="topo-summary" id="topo-summary"></div>
 
-                        <section class="topo-card">
-                            <header class="topo-card-head">
-                                <div>
-                                    <h3>
-                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="3" cy="8" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="13" cy="3" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="13" cy="13" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 8l6-4M5 8l6 4" stroke="currentColor" stroke-width="1.3"/></svg>
-                                        Networks
-                                    </h3>
-                                    <p class="topo-card-desc">Each entry becomes an OVN segment created per team (e.g. <code>${name}-team1-lan</code>).</p>
+                        <div class="topology-builder">
+                            <section class="topo-card">
+                                <header class="topo-card-head">
+                                    <div>
+                                        <h3>
+                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8h12M2 4h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                                            Network Mode
+                                        </h3>
+                                        <p class="topo-card-desc">Decide how networks are scoped across teams.</p>
+                                    </div>
+                                </header>
+                                <div class="radio-row">
+                                    <label class="radio-pill"><input type="radio" name="wiz-net-mode" value="multi" checked><span>Multi-network (per team)</span></label>
+                                    <label class="radio-pill"><input type="radio" name="wiz-net-mode" value="single"><span>Single network (one team)</span></label>
                                 </div>
-                                <button class="btn btn-secondary btn-sm" id="btn-add-network">+ Add Network</button>
-                            </header>
-                            <div id="topo-networks" class="topo-list"></div>
-                        </section>
+                                <small class="text-muted">Single network forces <code>team_count=1</code> in the generated tfvars.</small>
+                            </section>
 
-                        <section class="topo-card">
-                            <header class="topo-card-head">
-                                <div>
-                                    <h3>
-                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 7l5-4 5 4v5a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
-                                        Project Firewall
-                                    </h3>
-                                    <p class="topo-card-desc">Created automatically with these fixed interfaces.</p>
-                                </div>
-                                <span class="topo-badge">Auto</span>
-                            </header>
-                            <div class="static-fw-info">
-                                <div class="static-fw-row"><span class="eth-label">eth0</span> <span>Upstream WAN (DHCP)</span></div>
-                                <div class="static-fw-row"><span class="eth-label">eth1</span> <span><code>team_wan</code> network</span></div>
-                                <div class="static-fw-row"><span class="eth-label">eth2</span> <span><code>salt_lan</code> network</span></div>
-                            </div>
-                        </section>
+                            <section class="topo-card">
+                                <header class="topo-card-head">
+                                    <div>
+                                        <h3>
+                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="3" cy="8" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="13" cy="3" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="13" cy="13" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 8l6-4M5 8l6 4" stroke="currentColor" stroke-width="1.3"/></svg>
+                                            Networks
+                                        </h3>
+                                        <p class="topo-card-desc">Each entry becomes an OVN segment per team.</p>
+                                    </div>
+                                    <button class="btn btn-secondary btn-sm" id="btn-add-network">+ Add Network</button>
+                                </header>
+                                <div id="topo-networks" class="topo-list"></div>
+                            </section>
 
-                        <section class="topo-card">
-                            <header class="topo-card-head">
-                                <div>
-                                    <h3>
-                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 7l5-4 5 4v5a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M6 9h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-                                        Team Firewall
-                                    </h3>
-                                    <p class="topo-card-desc"><code>eth0</code> is the team WAN (DHCP). Map remaining interfaces to your networks with static IPs.</p>
+                            <section class="topo-card">
+                                <header class="topo-card-head">
+                                    <div>
+                                        <h3>
+                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 7l5-4 5 4v5a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+                                            Project Firewall
+                                        </h3>
+                                        <p class="topo-card-desc">Created automatically with these fixed interfaces.</p>
+                                    </div>
+                                    <span class="topo-badge">Auto</span>
+                                </header>
+                                <div class="static-fw-info">
+                                    <div class="static-fw-row"><span class="eth-label">eth0</span> <span>Upstream WAN (DHCP)</span></div>
+                                    <div class="static-fw-row"><span class="eth-label">eth1</span> <span><code>team_wan</code> network</span></div>
+                                    <div class="static-fw-row"><span class="eth-label">eth2</span> <span><code>salt_lan</code> network</span></div>
                                 </div>
-                                <button class="btn btn-secondary btn-sm" id="btn-add-fw-interface">+ Add Interface</button>
-                            </header>
-                            <div id="topo-fw-interfaces" class="topo-list"></div>
-                        </section>
+                            </section>
 
-                        <section class="topo-card">
-                            <header class="topo-card-head">
-                                <div>
-                                    <h3>
-                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M5 13h6M8 11v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-                                        Virtual Machines
-                                    </h3>
-                                    <p class="topo-card-desc">Each VM is replicated <em>once per team</em>.</p>
-                                </div>
-                                <button class="btn btn-secondary btn-sm" id="btn-add-vm">+ Add VM</button>
-                            </header>
-                            <div id="topo-vms" class="topo-list-vms"></div>
-                        </section>
+                            <section class="topo-card">
+                                <header class="topo-card-head">
+                                    <div>
+                                        <h3>
+                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 7l5-4 5 4v5a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M6 9h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                                            Team Firewall
+                                        </h3>
+                                        <p class="topo-card-desc"><code>eth0</code> is the team WAN (DHCP). Map remaining interfaces to your networks with static IPs.</p>
+                                    </div>
+                                    <button class="btn btn-secondary btn-sm" id="btn-add-fw-interface">+ Add Interface</button>
+                                </header>
+                                <div id="topo-fw-interfaces" class="topo-list"></div>
+                            </section>
+
+                            <section class="topo-card">
+                                <header class="topo-card-head">
+                                    <div>
+                                        <h3>
+                                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M5 13h6M8 11v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                                            Virtual Machines
+                                        </h3>
+                                        <p class="topo-card-desc">Each VM is replicated <em>once per team</em>. Connect a VM to a network to get an auto-suggested IP.</p>
+                                    </div>
+                                    <button class="btn btn-secondary btn-sm" id="btn-add-vm">+ Add VM</button>
+                                </header>
+                                <div id="topo-vms" class="topo-list-vms"></div>
+                            </section>
+                        </div>
                     </div>
 
                     <div class="wizard-footer mt-4">
@@ -255,19 +278,22 @@
                     </div>
                 </div>
 
-                <!-- Step 4 -->
+                <!-- Step 4: Review & Create -->
                 <div id="wizard-step-4" class="wizard-step hidden">
                     <div class="wizard-step-head">
                         <h2 class="wizard-step-title">Review &amp; Create</h2>
-                        <p class="wizard-step-desc">Double-check the configuration below. Once you create the project, the <code>main.tf</code> will be written to disk.</p>
+                        <p class="wizard-step-desc">Double-check the configuration below. Once you create the project, files will be written to disk.</p>
                     </div>
+
+                    <div id="wiz-review-tpl-banner" class="hidden tpl-selected-banner"></div>
+
                     <div class="review-panel">
                         <div class="review-section">
                             <h3 class="review-section-title">Project summary</h3>
                             <div class="review-grid" id="wiz-review-summary"></div>
                         </div>
                         <div class="review-section">
-                            <h3 class="review-section-title">Generated <code>main.tf</code> preview</h3>
+                            <h3 class="review-section-title" id="wiz-review-hcl-title">Generated <code>main.tf</code> preview</h3>
                             <pre class="code-preview" id="wiz-preview-hcl">Loading preview...</pre>
                         </div>
                     </div>

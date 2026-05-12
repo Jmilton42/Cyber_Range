@@ -1258,6 +1258,84 @@ code {
     display: flex;
 }
 
+/* ---------- Template preview banner (Step 3) ---------- */
+.tpl-preview-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin-bottom: 20px;
+}
+.tpl-banner-icon {
+    flex-shrink: 0;
+    color: var(--accent);
+    margin-top: 2px;
+}
+.tpl-banner-body { flex: 1; }
+.tpl-banner-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--fg);
+    margin-bottom: 4px;
+}
+.tpl-banner-desc {
+    font-size: 0.82rem;
+    color: var(--fg-muted);
+    line-height: 1.5;
+}
+
+/* ---------- Template selected banner (Step 4 review) ---------- */
+.tpl-selected-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-ring);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin-bottom: 20px;
+}
+.tpl-sel-icon {
+    flex-shrink: 0;
+    color: var(--accent);
+    margin-top: 2px;
+}
+.tpl-sel-body { flex: 1; }
+.tpl-sel-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 3px;
+}
+.tpl-sel-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--fg);
+    margin-bottom: 2px;
+}
+.tpl-sel-desc {
+    font-size: 0.8rem;
+    color: var(--fg-muted);
+}
+
+/* ---------- Network subnet input ---------- */
+.topo-item-network { align-items: center; flex-wrap: wrap; gap: 8px; }
+.net-name-input   { flex: 0 0 160px; min-width: 120px; }
+.net-subnet-input { flex: 1 1 200px; min-width: 160px; font-family: var(--font-mono); font-size: 0.82rem; }
+
+/* ---------- VM network IP hint ---------- */
+.vm-net-hint {
+    font-size: 0.78rem;
+    color: var(--fg-subtle);
+    margin-bottom: 10px;
+    line-height: 1.4;
+}
+
 /* ---------- Topology builder ---------- */
 .topology-builder {
     display: flex;

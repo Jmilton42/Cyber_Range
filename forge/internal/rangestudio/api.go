@@ -2,10 +2,15 @@ package rangestudio
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
+
+	"cyber-range-config/internal/forge"
 )
 
 // RegisterAPI wires up all /api/* routes on the given mux.
@@ -217,10 +222,23 @@ func handlePreviewProject() http.HandlerFunc {
 			return
 		}
 
-		if req.Template != "custom" || req.Topology == nil {
+		// For named templates, read and return the actual main.tf.
+		if req.Template != "custom" && req.Template != "" {
+			tpl, err := forge.FindTemplate(req.Template)
+			if err == nil && tpl.Path != "" {
+				if content, readErr := os.ReadFile(filepath.Join(tpl.Path, "main.tf")); readErr == nil {
+					writeJSON(w, map[string]string{"hcl": string(content)})
+					return
+				}
+			}
 			writeJSON(w, map[string]string{
-				"hcl": "# This template is copied verbatim from the templates directory.\n# Preview is only generated for custom topologies built in the wizard.",
+				"hcl": fmt.Sprintf("# Template %q\n# (source file not readable in this environment)", req.Template),
 			})
+			return
+		}
+
+		if req.Topology == nil {
+			writeJSON(w, map[string]string{"hcl": "# No topology defined."})
 			return
 		}
 

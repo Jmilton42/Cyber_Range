@@ -95,12 +95,14 @@ func LoadTemplates() ([]Template, error) {
 				continue
 			}
 			full := filepath.Join(dir, name)
-			if _, err := os.Stat(filepath.Join(full, "main.tf")); err != nil {
+			mainTF := filepath.Join(full, "main.tf")
+			if _, err := os.Stat(mainTF); err != nil {
 				continue
 			}
 			tpls = append(tpls, Template{
-				ID:   name,
-				Path: full,
+				ID:          name,
+				Path:        full,
+				Description: parseTemplateDescription(mainTF),
 			})
 		}
 		sort.Slice(tpls, func(i, j int) bool {
@@ -322,6 +324,20 @@ func copyDir(src, dst string) error {
 		}
 		return os.WriteFile(target, data, info.Mode())
 	})
+}
+
+// parseTemplateDescription reads the description value from the first
+// lxd_project resource block in a main.tf file. Returns "" if not found.
+func parseTemplateDescription(mainTFPath string) string {
+	data, err := os.ReadFile(mainTFPath)
+	if err != nil {
+		return ""
+	}
+	re := regexp.MustCompile(`(?s)resource\s+"lxd_project"\s+"[^"]*"\s*\{[^}]*?description\s*=\s*"([^"]*)"`)
+	if m := re.FindSubmatch(data); len(m) > 1 {
+		return strings.TrimSpace(string(m[1]))
+	}
+	return ""
 }
 
 // rewriteProjectName mutates the project_name variable's default value

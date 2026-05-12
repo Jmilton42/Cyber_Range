@@ -15,13 +15,14 @@ import (
 // All optional fields default to sensible values when omitted so the
 // frontend can send only what the user actually filled in.
 type CreateProjectRequest struct {
-	Name      string          `json:"name"`
-	Group     string          `json:"group"`     // Education, Research, Outreach, CIG
-	SubGroup  string          `json:"sub_group"` // DCIG, OCIG, COMP, CTF
-	Template  string          `json:"template"`  // template id; "custom" for HCL generator
-	TeamCount int             `json:"team_count"`
-	NeedsGPU  bool            `json:"needs_gpu"` // Research only: project-wide GPU requirement
-	Topology  *CustomTopology `json:"topology,omitempty"`
+	Name        string          `json:"name"`
+	Group       string          `json:"group"`       // Education, Research, Outreach, CIG
+	SubGroup    string          `json:"sub_group"`   // DCIG, OCIG, COMP, CTF
+	Template    string          `json:"template"`    // template id; "custom" for HCL generator
+	TeamCount   int             `json:"team_count"`
+	Description string          `json:"description"` // user-provided project description
+	NeedsGPU    bool            `json:"needs_gpu"`   // Research only: project-wide GPU requirement
+	Topology    *CustomTopology `json:"topology,omitempty"`
 }
 
 // CreateProjectResponse is returned after a successful project scaffold.
@@ -112,14 +113,15 @@ func CreateProject(req CreateProjectRequest, mock bool, testdataDir string, insp
 	}
 
 	meta := map[string]interface{}{
-		"name":       req.Name,
-		"group":      req.Group,
-		"sub_group":  req.SubGroup,
-		"template":   req.Template,
-		"team_count": req.TeamCount,
-		"needs_gpu":  req.NeedsGPU,
-		"created_at": time.Now().Format(time.RFC3339),
-		"created_by": "range-studio",
+		"name":        req.Name,
+		"group":       req.Group,
+		"sub_group":   req.SubGroup,
+		"template":    req.Template,
+		"team_count":  req.TeamCount,
+		"description": req.Description,
+		"needs_gpu":   req.NeedsGPU,
+		"created_at":  time.Now().Format(time.RFC3339),
+		"created_by":  "range-studio",
 	}
 	metaJSON, _ := json.MarshalIndent(meta, "", "  ")
 	_ = os.WriteFile(filepath.Join(targetDir, ".rangestudio.json"), metaJSON, 0644)
