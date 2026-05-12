@@ -401,6 +401,13 @@ resource "lxd_instance" "team_{{sanitize $vm.Name}}" {
       ethernets:
 {{- range $i, $net := $vm.Networks}}
 {{- if eq $net "guac_wan"}}
+{{- $nip := findNetIp $vm.NetIPs "guac_wan"}}
+{{- if $nip.IP}}
+        enp{{add $i 5}}s0:
+          dhcp4: false
+          addresses:
+            - {{$nip.IP}}
+{{- else}}
         enp{{add $i 5}}s0:
           dhcp4: false
           addresses:

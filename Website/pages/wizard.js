@@ -404,7 +404,9 @@
                                 <input type="checkbox" ${vm.networks.includes('guac_wan') ? 'checked' : ''} data-vm-net="guac_wan">
                                 <span>guac_wan</span>
                             </label>
-                            <span class="text-muted text-sm" style="flex:1;">Remote access (DHCP — no IP needed)</span>
+                            <input type="text" placeholder="IP (e.g. 10.0.${var.guac_subnet_octet}.${3 + count.index}/16)"
+                                   value="${RS.escapeAttr((netIps.find((n) => n.network === 'guac_wan') || {}).ip || '')}"
+                                   ${!vm.networks.includes('guac_wan') ? 'disabled' : ''} data-vm-netip="guac_wan">
                         </div>
                         ${wizState.topology.networks.length === 0 ? `
                             <div class="topo-empty" style="padding:14px;">
